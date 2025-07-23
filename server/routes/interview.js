@@ -5,6 +5,9 @@ import {
     startInterview,
     nextQuestion,
     getFinalFeedback,
+    submitCode,
+    getDSAProblems,
+    getCurrentProblem
 } from "../controllers/interviewController.js";
 import { 
     handleResumeUploadError, 
@@ -22,5 +25,10 @@ router.post("/start", startInterview);
 router.post("/next-question", nextQuestion);
 
 router.post("/summary", getFinalFeedback);
+
+// DSA-specific routes
+router.post("/submit-code", submitCode);
+router.get("/dsa-problems", getDSAProblems);
+router.get("/current-problem", getCurrentProblem);
 
 export default router;

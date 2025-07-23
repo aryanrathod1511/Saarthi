@@ -115,46 +115,25 @@ ${prompt}
 
             const result = response.data.candidates[0].content.parts[0].text;
 
-            // Enhanced parsing with better cleaning
+            // Simple JSON parsing
             let question, feedback;
             
-            // First, try to parse as JSON
             try {
-                // Look for JSON structure
                 const jsonMatch = result.match(/\{[\s\S]*\}/);
                 if (jsonMatch) {
                     const jsonResponse = JSON.parse(jsonMatch[0]);
-                    question = jsonResponse.question || jsonResponse.NEXT_QUESTION || jsonResponse.next_question;
-                    feedback = jsonResponse.feedback || jsonResponse.FEEDBACK;
+                    question = jsonResponse.question;
+                    feedback = jsonResponse.feedback;
                 }
             } catch (jsonError) {
-                console.log('JSON parsing failed, trying text parsing');
+                console.log('JSON parsing failed, using fallback');
             }
             
-            // If JSON parsing didn't work, try text-based parsing
-            if (!question || !feedback) {
-                // Look for question and feedback patterns
-                if (result.includes('question:') && result.includes('feedback:')) {
-                    const questionMatch = result.match(/question:\s*([\s\S]*?)(?=feedback:|$)/i);
-                    const feedbackMatch = result.match(/feedback:\s*([\s\S]*?)$/i);
-                    
-                    if (questionMatch) question = questionMatch[1].trim();
-                    if (feedbackMatch) feedback = feedbackMatch[1].trim();
-                } else if (result.includes('"question"') && result.includes('"feedback"')) {
-                    const questionMatch = result.match(/"question"\s*:\s*"([^"]*)"/i);
-                    const feedbackMatch = result.match(/"feedback"\s*:\s*"([^"]*)"/i);
-                    
-                    if (questionMatch) question = questionMatch[1].trim();
-                    if (feedbackMatch) feedback = feedbackMatch[1].trim();
-                } else {
-                    // Fallback: clean the response and use it as question
-                    question = cleanResponse(result);
-                    feedback = "Response parsed as question due to format issues.";
-                }
+            // Fallback: use the entire response as question
+            if (!question) {
+                question = cleanResponse(result);
+                feedback = "Response parsed as question";
             }
-
-            // Clean the question to remove any thinking text
-            question = cleanResponse(question);
 
             return {
                 question: question ? question.trim() : "Please provide your response to continue the interview.",
@@ -218,142 +197,88 @@ function cleanResponse(text) {
     return cleaned;
 }
 
-export const buildPrompt = async(transcript, toneMetrics, companyInfo = null) => {
-    const toneAnalysis = toneMetrics ? `
-Tone Analysis:
-- Confidence Level: ${toneMetrics.confidence || 'N/A'}/10
-- Stress Level: ${toneMetrics.stress || 'N/A'}/10
-- Engagement: ${toneMetrics.engagement || 'N/A'}/10
-- Clarity: ${toneMetrics.clarity || 'N/A'}/10
-- Speaking Pace: ${toneMetrics.pace || 'N/A'}/10
-- Volume: ${toneMetrics.volume || 'N/A'}/10
-` : '';
-
-    const companyContext = companyInfo ? `
-Company Context: ${companyInfo.name} (${companyInfo.type})
-Role: ${companyInfo.role} (${companyInfo.level})
-` : '';
-
-    return `The candidate's response is: "${transcript}"
-
-${companyContext}
-${toneAnalysis}
-
-**RESEARCH AND INTELLIGENCE TASKS:**
-1. Research ${companyInfo ? companyInfo.name : 'current'} interview patterns for this response type
-2. Auto-determine appropriate follow-up question category and difficulty
-3. Adapt question style to match ${companyInfo ? companyInfo.name + "'s" : 'company'} culture
-4. Auto-analyze candidate experience level from their response and background
-5. Handle any clarification requests naturally within your response
-
-Based on this response and tone analysis, please:
-1. **Provide internal feedback** (for final analysis only - NOT for user display): Brief evaluation of their answer (technical accuracy, communication, confidence, specially tonematrics.)
-2. Ask the next appropriate question that builds upon their response or explores a different area
-3. Consider their confidence and stress levels when formulating your next question
-4. Ensure the question aligns with real interview experiences
-5. Auto-handle any clarification requests without revealing answers
-
-If the candidate seems:
-- Not confident: Research encouraging questions that build confidence
-- Stressed: Research simpler, more approachable questions
-- Very confident: Research challenging questions or edge cases
-- Unclear: Research clarification techniques used in real interviews
-- Asking for help/answers: Politely redirect while maintaining professional tone
-
-Keep your response professional and constructive. Use real-time research to make this as accurate as possible. Auto-handle all clarification requests intelligently.
-
-**IMPORTANT**: The internal feedback is for crafting the final comprehensive analysis, not for immediate user display. so be honest with the feedback, dont hesited to include negative points so the at the end candidate can improve his skills.`;
-}
-
-export const buildFinalSummaryPrompt = (sessionData, companyInfo = null) => {
-    const companyContext = companyInfo ? `
-**Company-Specific Analysis:**
-- Target Company: ${companyInfo.name} (${companyInfo.type})
-- Role: ${companyInfo.role} (${companyInfo.level})
-- Research ${companyInfo.name}'s evaluation criteria and standards
-` : '';
-
-    let prompt = `Here's the complete interview session data. Please provide a comprehensive analysis and summary within 300-400 words including:
-
-${companyContext}
-
-Session Overview:
-- Total Questions Asked: ${sessionData.length}
-- Interview Duration: Based on timestamps
-
-**RESEARCH-BASED ANALYSIS:**
-
-1. **Experience Level Assessment** (20% weight)
-   - Auto-analyze the candidate's actual experience level based on their performance
-   - Compare their demonstrated skills against their resume background
-   - Assess if the interview difficulty was appropriate for their level
-   - Provide insights on their true experience level
-
-2. **Company-Specific Assessment** (25% weight)
-   - Research ${companyInfo ? companyInfo.name : 'target company'}'s evaluation criteria
-   - Assess cultural alignment and fit
-   - Compare against industry standards
-
-3. **Technical Assessment** (30% weight)
-   - Key strengths demonstrated
-   - Areas needing improvement
-   - Technical depth and breadth
-   - Problem-solving approach
-
-4. **Communication Skills** (15% weight)
-   - Clarity of expression
-   - Confidence level throughout interview
-   - Response structure and organization
-
-5. **Overall Evaluation** (10% weight)
-   - Confidence score (1-10)
-   - Technical proficiency score (1-10)
-   - Communication score (1-10)
-   - Cultural fit score (1-10)
-   - Overall recommendation
-
-6. **Specific Recommendations**
-   - Immediate areas to focus on
-   - Long-term development suggestions
-   - Company-specific preparation advice
-
-Session Data:
-`;
-
-    sessionData.forEach((round, i) => {
-        prompt += `\n=== Round ${i + 1} ===\n`;
-        if (round.question) prompt += `Question: ${round.question}\n`;
-        if (round.transcript) prompt += `Answer: ${round.transcript}\n`;
-        if (round.feedback) prompt += `Feedback: ${round.feedback}\n`;
-        if (round.toneMetrics) {
-            prompt += `Tone Analysis: Confidence(${round.toneMetrics.confidence || 'N/A'}), Stress(${round.toneMetrics.stress || 'N/A'}), Engagement(${round.toneMetrics.engagement || 'N/A'})\n`;
-        }
-        if (round.questionCategory) {
-            prompt += `Category: ${round.questionCategory}\n`;
-        }
-    });
-
-    prompt += `\n\nPlease provide a professional, constructive, and detailed analysis based on this complete interview session. Use research to ensure accuracy and relevance to ${companyInfo ? companyInfo.name : 'the target company'}. Include experience level insights based on performance.`;
-
-    return prompt;
-};
-
-export const generateInterviewSummary = async (prompt, companyInfo = null) => {
-    // Check if API key is available
+/**
+ * Generate comprehensive interview analysis and feedback
+ */
+export const generateInterviewAnalysis = async (interviewData, companyInfo = null) => {
     if (!GEMINI_API_KEY) {
-        throw new Error("Gemini API key is not configured. Please set GEMINI_API_KEY in your environment variables.");
+        throw new Error("Gemini API key is not configured.");
     }
 
-    // Enhanced prompt for summary generation
-    let enhancedPrompt = prompt;
-    if (companyInfo) {
-        enhancedPrompt = `**Company Context: ${companyInfo.name} (${companyInfo.type})**
-**Role: ${companyInfo.role} (${companyInfo.level})**
+    const {
+        aiQuestions = [],
+        userResponses = [],
+        toneAnalysis = [],
+        interviewType = 'technical',
+        candidateName = 'Not specified',
+        totalRounds = 0
+    } = interviewData;
 
-${prompt}
+    // Calculate tone analysis averages
+    const toneSummary = toneAnalysis.length > 0 ? 
+        `Average Confidence: ${(toneAnalysis.reduce((sum, entry) => sum + (entry?.confidence || 0), 0) / toneAnalysis.length).toFixed(2)}/10
+         Average Stress: ${(toneAnalysis.reduce((sum, entry) => sum + (entry?.stress || 0), 0) / toneAnalysis.length).toFixed(2)}/10
+         Average Engagement: ${(toneAnalysis.reduce((sum, entry) => sum + (entry?.engagement || 0), 0) / toneAnalysis.length).toFixed(2)}/10
+         Average Clarity: ${(toneAnalysis.reduce((sum, entry) => sum + (entry?.clarity || 0), 0) / toneAnalysis.length).toFixed(2)}/10
+         Average Pace: ${(toneAnalysis.reduce((sum, entry) => sum + (entry?.pace || 0), 0) / toneAnalysis.length).toFixed(2)}/10
+         Average Volume: ${(toneAnalysis.reduce((sum, entry) => sum + (entry?.volume || 0), 0) / toneAnalysis.length).toFixed(2)}/10` :
+        'No tone analysis data available';
 
-**REMEMBER**: Provide a comprehensive, professional interview summary with clear sections and actionable feedback.`;
-    }
+    const enhancedPrompt = `**COMPREHENSIVE INTERVIEW ANALYSIS AND FEEDBACK**
+
+**Interview Context:**
+- Company: ${companyInfo?.name || 'Tech Company'} (${companyInfo?.type || 'startup'})
+- Role: ${companyInfo?.role || 'Software Development Engineer'} (${companyInfo?.level || 'Entry level'})
+- Interview Type: ${interviewType}
+- Total Rounds: ${totalRounds}
+- Candidate: ${candidateName}
+
+**Complete Interview Data:**
+
+**AI Questions Asked:**
+${aiQuestions.map((question, index) => 
+    `${index + 1}. Round ${index + 1}: ${question}`
+).join('\n')}
+
+**User Responses:**
+${userResponses.map((response, index) => 
+    `${index + 1}. Round ${index + 1}: "${response}"`
+).join('\n')}
+
+**Tone Analysis Summary:**
+${toneSummary}
+
+**Your Task: Generate a comprehensive interview summary with the following sections:**
+
+**1. Overall Performance Assessment**
+Evaluate their overall performance across all questions. Consider technical knowledge, communication skills, and problem-solving approach. Provide a balanced assessment of strengths and areas for improvement.
+
+**2. Technical Skills Evaluation**
+Assess their technical knowledge and problem-solving abilities. Evaluate their approach to technical questions and comment on their coding/algorithmic thinking.
+
+**3. Communication Skills Assessment**
+Evaluate their verbal communication clarity, ability to explain complex concepts, and consider their tone analysis metrics (confidence, stress, engagement, etc.).
+
+**4. Behavioral Competencies**
+Evaluate their responses to behavioral questions, assess their teamwork, leadership, and problem-solving examples, and consider their cultural fit potential.
+
+**5. Specific Strengths**
+- List 3-5 specific strengths demonstrated during the interview
+- Be specific and reference their actual responses
+
+**6. Areas for Improvement**
+- List 3-5 specific areas where they could improve
+- Provide constructive feedback with actionable suggestions
+
+**7. Recommendations**
+Provide specific recommendations for improvement, suggest resources or practice areas, and give actionable next steps.
+
+**8. Overall Rating**
+Provide an overall rating (1-10 scale) with detailed explanation considering all aspects: technical skills, communication, problem-solving, etc.
+
+**Format the response as a professional interview feedback report suitable for HR and hiring managers. Use clear section headers and bullet points where appropriate.**
+
+**Important:** Be thorough, specific, and constructive. Reference their actual responses and tone analysis data in your assessment.`;
 
     const body = {
         contents: [
@@ -365,59 +290,35 @@ ${prompt}
             }
         ],
         generationConfig: {
-            temperature: 0.2, // Lower temperature for more consistent summaries
+            temperature: 0.2,
             topK: 20,
             topP: 0.8,
-            maxOutputTokens: 2048, // Higher limit for detailed summaries
+            maxOutputTokens: 2048,
         }
     };
 
-    // Try different models if one fails
     for (let i = 0; i < GEMINI_MODELS.length; i++) {
         const currentUrl = GEMINI_MODELS[i];
-        console.log(`Generating summary with model ${i + 1}/${GEMINI_MODELS.length}: ${currentUrl.split('/').pop()}`);
         
         try {
             const response = await axios.post(`${currentUrl}?key=${GEMINI_API_KEY}`, body, {
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                timeout: 60000 // Longer timeout for summary generation
+                headers: { 'Content-Type': 'application/json' },
+                timeout: 60000
             });
 
-            console.log("Summary generation successful");
-            
             if (!response.data.candidates || !response.data.candidates[0]) {
                 throw new Error("Invalid response format from Gemini API");
             }
 
-            const summary = response.data.candidates[0].content.parts[0].text;
-            return summary.trim();
+            return response.data.candidates[0].content.parts[0].text.trim();
 
         } catch (error) {
-            console.error(`Model ${i + 1} failed for summary:`, error.message);
+            console.error(`Model ${i + 1} failed for interview analysis:`, error.message);
             
             if (i === GEMINI_MODELS.length - 1) {
-                if (error.response) {
-                    console.error("Response status:", error.response.status);
-                    console.error("Response data:", error.response.data);
-                    
-                    if (error.response.status === 404) {
-                        throw new Error("All Gemini API models failed. Please check your API key and ensure it's valid.");
-                    } else if (error.response.status === 403) {
-                        throw new Error("Access denied. Please check your API key permissions.");
-                    } else if (error.response.status === 400) {
-                        throw new Error("Bad request. Please check your prompt format.");
-                    }
-                } else if (error.request) {
-                    throw new Error("No response received from Gemini API. Please check your internet connection.");
-                } else {
-                    throw new Error(`Gemini API error: ${error.message}`);
-                }
+                throw new Error(`Interview analysis generation failed: ${error.message}`);
             }
             continue;
         }
     }
 };
-
-export default { ask, buildPrompt, buildFinalSummaryPrompt, generateInterviewSummary };

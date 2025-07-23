@@ -118,6 +118,12 @@ const interviewReducer = (state, action) => {
         isLoading: false
       };
 
+    case 'SET_QUESTIONS':
+      return {
+        ...state,
+        questions: action.payload
+      };
+
     case 'RESET_INTERVIEW':
       return {
         ...initialState
@@ -179,6 +185,10 @@ export const InterviewProvider = ({ children }) => {
     dispatch({ type: 'SET_ERROR', payload: error });
   };
 
+  const setQuestions = (questions) => {
+    dispatch({ type: 'SET_QUESTIONS', payload: questions });
+  };
+
   const resetInterview = () => {
     dispatch({ type: 'RESET_INTERVIEW' });
   };
@@ -197,7 +207,8 @@ export const InterviewProvider = ({ children }) => {
     setInterviewProgress,
     setLoading,
     setError,
-    resetInterview
+    resetInterview,
+    setQuestions
   };
 
   return (

@@ -242,10 +242,6 @@ const pollForCompletion = async (transcriptId) => {
   throw new Error(`Transcription timed out after ${CONFIG.maxPollAttempts} attempts`);
 };
 
-/**
- * Fallback speech-to-text using Web Speech API (client-side only)
- * This is a placeholder for when Assembly AI is not available
- */
 export const fallbackSpeechToText = async (audioPath) => {
   console.log('Using fallback speech-to-text');
   throw new Error('Speech-to-text service is not available. Please check your Assembly AI API configuration.');

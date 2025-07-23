@@ -87,5 +87,56 @@ export const interviewService = {
     }
     
     return response.json();
+  },
+
+  // DSA-specific endpoints
+  getDSAProblems: async (sessionId) => {
+    const response = await fetch(`${API_BASE_URL}/api/interview/dsa-problems?sessionId=${sessionId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Get DSA problems failed: ${response.status}`);
+    }
+    
+    return response.json();
+  },
+
+  getCurrentProblem: async (sessionId) => {
+    const response = await fetch(`${API_BASE_URL}/api/interview/current-problem?sessionId=${sessionId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Get current problem failed: ${response.status}`);
+    }
+    
+    return response.json();
+  },
+
+  submitCode: async (sessionId, code, language = 'javascript') => {
+    const response = await fetch(`${API_BASE_URL}/api/interview/submit-code`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sessionId,
+        code,
+        language
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Submit code failed: ${response.status}`);
+    }
+    
+    return response.json();
   }
 }; 
