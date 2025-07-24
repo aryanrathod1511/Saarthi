@@ -7,7 +7,6 @@ export const formatTime = (seconds) => {
 export const typeWriter = (text, setDisplayedQuestion, speed = 50, onComplete = null) => {
   if (!text) return;
   
-  setDisplayedQuestion('');
   let i = 0;
   function type() {
     if (i < text.length) {
@@ -15,7 +14,6 @@ export const typeWriter = (text, setDisplayedQuestion, speed = 50, onComplete = 
       i++;
       setTimeout(type, speed);
     } else {
-      // Call the callback when typing is complete
       if (onComplete && typeof onComplete === 'function') {
         onComplete();
       }
@@ -24,17 +22,29 @@ export const typeWriter = (text, setDisplayedQuestion, speed = 50, onComplete = 
   type();
 };
 
-export const speakText = (text, setIsPlaying) => {
-  if ('speechSynthesis' in window) {
+export const speakText = (text, setIsPlaying = null) => {
+  if (!text || !('speechSynthesis' in window)) {
+    return null;
+  }
+
+  try {
     window.speechSynthesis.cancel();
     const utterance = new window.SpeechSynthesisUtterance(text);
     utterance.rate = 0.9;
     utterance.volume = 1;
-    utterance.pitch = 1;
-    utterance.onstart = () => setIsPlaying(true);
-    utterance.onend = () => setIsPlaying(false);
+    
+    utterance.onstart = () => {
+      if (setIsPlaying) setIsPlaying(true);
+    };
+    
+    utterance.onend = () => {
+      if (setIsPlaying) setIsPlaying(false);
+    };
+    
     window.speechSynthesis.speak(utterance);
     return utterance;
+  } catch (error) {
+    console.error('Speech synthesis error:', error);
+    return null;
   }
-  return null;
 }; 

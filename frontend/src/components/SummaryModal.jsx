@@ -2,7 +2,14 @@ import React from 'react';
 import { X, Download, Share2, Star, TrendingUp, MessageSquare, Clock, Award } from 'lucide-react';
 
 const SummaryModal = ({ isOpen, onClose, summaryData }) => {
-  if (!isOpen || !summaryData) return null;
+  console.log('🔍 SummaryModal render:', { isOpen, hasSummaryData: !!summaryData, summaryData });
+  
+  if (!isOpen || !summaryData) {
+    console.log('❌ SummaryModal not showing:', { isOpen, hasSummaryData: !!summaryData });
+    return null;
+  }
+
+  console.log('✅ SummaryModal showing with data:', summaryData);
 
   const { summary, companyInfo, totalRounds, aiQuestionsCount, userResponsesCount, toneAnalysisCount } = summaryData;
 

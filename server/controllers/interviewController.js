@@ -146,14 +146,11 @@ export const processAudio = async (req, res) => {
         req.body.transcript = finalTranscript;
         req.body.toneMatrix = finalToneMatrix;
 
-        // Clean up audio file after processing (optional)
+        // Clean up audio file after processing
         try {
-            // Keep audio files for debugging in development
-            if (process.env.NODE_ENV === 'production') {
-                fs.unlinkSync(audioPath);
-            }
+            fs.unlinkSync(audioPath);
         } catch (cleanupError) {
-            console.warn('Could not clean up USER audio file:', cleanupError.message);
+            console.warn('Could not clean up audio file:', cleanupError.message);
         }
 
         res.status(200).json({
@@ -199,11 +196,22 @@ export const nextQuestion = async (req, res) => {
             toneMetrics: toneMatrix || {}
         });
 
+        // Get current problem for DSA interviews
+        let currentProblem = null;
+        if (promptEngineer.interviewContext.interviewType.toLowerCase() === 'dsa') {
+            const dsaProblems = promptEngineer.interviewContext.dsaProblems;
+            const currentIndex = promptEngineer.interviewContext.currentProblemIndex || 0;
+            if (dsaProblems && currentIndex < dsaProblems.length) {
+                currentProblem = dsaProblems[currentIndex];
+            }
+        }
+
         // Generate next question using flow service
         const context = {
             transcript: transcript,
             toneMetrics: toneMatrix || {},
-            elapsedMinutes: elapsedMinutes
+            elapsedMinutes: elapsedMinutes,
+            currentProblem: currentProblem  // Add the current problem to context
         };
 
         const nextQuestionResponse = await interviewFlowService.generateNextQuestion(promptEngineer, context);
@@ -213,6 +221,16 @@ export const nextQuestion = async (req, res) => {
             currentRound: (promptEngineer.interviewContext.questionHistory.length + 1),
             currentQuestion: nextQuestionResponse.question
         });
+
+        // Handle shouldMoveToNextProblem flag
+        if (nextQuestionResponse.shouldMoveToNextProblem) {
+            const currentIndex = promptEngineer.interviewContext.currentProblemIndex || 0;
+            const dsaProblems = promptEngineer.interviewContext.dsaProblems;
+            
+            if (dsaProblems && currentIndex < dsaProblems.length - 1) {
+                promptEngineer.interviewContext.currentProblemIndex = currentIndex + 1;
+            }
+        }
 
         res.status(200).json({
             question: nextQuestionResponse.question,
@@ -355,8 +373,18 @@ export const getFinalFeedback = async (req, res) => {
 
         console.log('Summary generated successfully, length:', summary.length);
 
-        //delete the session
+        // Delete the session
         deleteSession(sessionId);
+
+        // Delete resume file if it exists
+        try {
+            const resumePath = promptEngineer.resumeData?.filePath;
+            if (resumePath && fs.existsSync(resumePath)) {
+                fs.unlinkSync(resumePath);
+            }
+        } catch (cleanupError) {
+            console.warn('Could not clean up resume file:', cleanupError.message);
+        }
 
         res.status(200).json({ 
             summary: summary,
@@ -534,6 +562,16 @@ export const submitCode = async (req, res) => {
             toneMetrics: {}
         });
 
+        // Handle shouldMoveToNextProblem flag
+        if (nextQuestionResponse.shouldMoveToNextProblem) {
+            const currentIndex = promptEngineer.interviewContext.currentProblemIndex || 0;
+            const dsaProblems = promptEngineer.interviewContext.dsaProblems;
+            
+            if (dsaProblems && currentIndex < dsaProblems.length - 1) {
+                promptEngineer.interviewContext.currentProblemIndex = currentIndex + 1;
+            }
+        }
+
         res.status(200).json({
             evaluation: evaluation,
             followUpQuestion: followUp,
@@ -551,6 +589,34 @@ export const submitCode = async (req, res) => {
         console.error('Error in submitCode:', error);
         res.status(500).json({ error: 'Failed to evaluate code' });
     }
+};
+
+export const terminateSession = async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Session ID is required' });
+    }
+
+    console.log(`Terminating session: ${sessionId}`);
+    
+    // Delete the session
+    deleteSession(sessionId);
+    
+    console.log(`Session ${sessionId} terminated successfully`);
+
+    res.status(200).json({ 
+      message: 'Session terminated successfully',
+      sessionId: sessionId
+    });
+  } catch (error) {
+    console.error('Error terminating session:', error);
+    res.status(500).json({ 
+      error: 'Failed to terminate session',
+      message: error.message 
+    });
+  }
 };
 
 

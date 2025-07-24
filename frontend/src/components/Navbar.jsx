@@ -33,7 +33,12 @@ const Navbar = () => {
     { path: '/profile', label: 'Profile', icon: User },
   ];
 
-  const isActive = (path) => location.pathname === path;
+  const isActive = (path) => {
+    if (path === '/interview') {
+      return location.pathname === '/interview' || location.pathname === '/interview/ongoing';
+    }
+    return location.pathname === path;
+  };
 
   return (
     <motion.nav 

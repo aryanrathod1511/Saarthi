@@ -72,6 +72,8 @@ export const interviewService = {
   },
 
   getSummary: async (sessionId) => {
+    console.log('🔍 Calling getSummary API with sessionId:', sessionId);
+    
     const response = await fetch(`${API_BASE_URL}/api/interview/summary`, {
       method: 'POST',
       headers: {
@@ -83,10 +85,14 @@ export const interviewService = {
     });
     
     if (!response.ok) {
+      console.error('❌ getSummary API failed:', response.status, response.statusText);
       throw new Error(`Get summary failed: ${response.status}`);
     }
     
-    return response.json();
+    const data = await response.json();
+    console.log('✅ getSummary API response:', data);
+    
+    return data;
   },
 
   // DSA-specific endpoints
@@ -138,5 +144,29 @@ export const interviewService = {
     }
     
     return response.json();
+  },
+
+  terminateSession: async (sessionId) => {
+    console.log('🗑️ Terminating session:', sessionId);
+    
+    const response = await fetch(`${API_BASE_URL}/api/interview/terminate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sessionId
+      })
+    });
+    
+    if (!response.ok) {
+      console.error('❌ terminateSession API failed:', response.status, response.statusText);
+      throw new Error(`Terminate session failed: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('✅ Session terminated successfully:', data);
+    
+    return data;
   }
 }; 

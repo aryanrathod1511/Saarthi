@@ -7,6 +7,5 @@ export { default as Checkbox } from './Checkbox';
 export { default as Radio } from './Radio';
 export { default as LoadingSpinner } from './LoadingSpinner';
 export { default as Modal } from './Modal';
-export { default as Toast } from './Toast';
-export { default as ToastContainer } from './ToastContainer';
+export { Toast, ToastContainer } from './Toast';
 export { default as CodeEditor } from './CodeEditor'; 

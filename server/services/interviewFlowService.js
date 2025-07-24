@@ -1,5 +1,5 @@
 import {ask} from './gemini.js';
-import {ask} from './gemini.js';
+
 
 class InterviewFlowService {
     constructor() {
@@ -129,7 +129,7 @@ ${dsaProblemContext ? `
 
 **INTERVIEW TYPE SPECIFIC INSTRUCTIONS:**
 
-${interviewType === 'dsa' ? this.getDSAInstructions(currentProblem, config) : ''}
+${interviewType === 'dsa' ? this.getDSAInstructions(promptEngineer, config) : ''}
 ${interviewType === 'resume_cs' ? this.getResumeCSInstructions(promptEngineer, config) : ''}
 ${interviewType === 'technical_hr' ? this.getTechnicalHRInstructions(promptEngineer, config) : ''}
 ${interviewType === 'hr' ? this.getHRInstructions(promptEngineer, config) : ''}
@@ -140,8 +140,7 @@ ${interviewType === 'hr' ? this.getHRInstructions(promptEngineer, config) : ''}
   "phase": "${currentPhase}",
   "shouldMoveToNextProblem": false,
   "showDSAProblem": false,
-  "isWrapUp": false,
-  "timeContext": "Brief mention of time if relevant"
+  "isWrapUp": false
 }
 
 **CRITICAL:**
@@ -149,28 +148,51 @@ ${interviewType === 'hr' ? this.getHRInstructions(promptEngineer, config) : ''}
 - Acknowledge their previous response
 - Adapt difficulty based on their performance
 - Keep track of time and phase progression
-- Set "showDSAProblem": true when introducing DSA/coding problems for resume_cs and technical_hr interviews`;
+- **IMPORTANT:** Set "showDSAProblem": false during introduction phase
+- **IMPORTANT:** Set "showDSAProblem": true ONLY when introducing the first DSA/coding problem for resume_cs and technical_hr interviews
+- For DSA interviews, always set "showDSAProblem": true since problems are always shown
+- **CRITICAL:** NEVER set "shouldMoveToNextProblem": true during introduction phase (first 2 rounds)
+- **CRITICAL:** Only set "shouldMoveToNextProblem": true when thoroughly discussing the current problem and ready to move to the next one`;
 
         const aiResponse = await ask(nextQuestionPrompt, promptEngineer.companyInfo);
+        
+        // Fix: Handle the object response from ask() function
+        if (aiResponse && typeof aiResponse === 'object' && aiResponse.question) {
+            return {
+                question: aiResponse.question,
+                phase: aiResponse.phase || currentPhase,
+                shouldMoveToNextProblem: aiResponse.shouldMoveToNextProblem || false,
+                showDSAProblem: aiResponse.showDSAProblem || false,
+                isWrapUp: aiResponse.isWrapUp || false
+            };
+        }
+        
+        // Fallback to parseAIResponse for string responses
         return this.parseAIResponse(aiResponse);
     }
 
     /**
      * Generate DSA-specific instructions
      */
-    getDSAInstructions(currentProblem, config) {
+    getDSAInstructions(promptEngineer, config) {
+        const currentRound = promptEngineer.interviewContext.questionHistory?.length || 0;
+        const isIntroductionPhase = currentRound <= 2; // First 2 rounds are introduction
+        const currentProblem = promptEngineer.interviewContext.currentProblem;
+        
         if (!currentProblem) {
             return `
 **DSA INTERVIEW - PROBLEM PRESENTATION:**
 - The DSA problem is now displayed on the right side of the screen
 - Mention: "I've displayed the problem on your screen. Please take a look at it."
-- Present the current problem: "${currentProblem?.title || 'Loading...'}"
+- Present the current problem: "Loading problem..."
 - Ask if they understand the problem requirements
 - Give them time to think and approach the solution
 - Ask follow-up questions about their approach
-- Only set "shouldMoveToNextProblem": true when they've discussed their approach thoroughly
+- **CRITICAL:** Only set "shouldMoveToNextProblem": true when they've discussed their approach thoroughly AND it's NOT the introduction phase
+- **CRITICAL:** During introduction phase (first 2 rounds), NEVER set "shouldMoveToNextProblem": true
 - Time management: ${config.maxDuration} minutes total for ${config.problemsCount} problems
-- Current time: ${config.maxDuration} minutes remaining`;
+- Current time: ${config.maxDuration} minutes remaining
+- Current Round: ${currentRound} (Introduction: ${isIntroductionPhase ? 'Yes' : 'No'})`;
         }
 
         return `
@@ -180,9 +202,12 @@ ${interviewType === 'hr' ? this.getHRInstructions(promptEngineer, config) : ''}
 - Discuss their approach, time complexity, space complexity
 - Ask about edge cases and optimizations
 - Ask follow-up questions about their solution
-- Only set "shouldMoveToNextProblem": true when discussion is complete
+- **CRITICAL:** Only set "shouldMoveToNextProblem": true when it is the last question from your side for the current problem AND it's NOT the introduction phase
+- **CRITICAL:** During introduction phase (first 2 rounds), NEVER set "shouldMoveToNextProblem": true
+- **CRITICAL:** Only move to next problem after thorough discussion of current problem
 - Time management: ${config.maxDuration} minutes total for ${config.problemsCount} problems
-- Current time: ${config.maxDuration} minutes remaining`;
+- Current time: ${config.maxDuration} minutes remaining
+- Current Round: ${currentRound} (Introduction: ${isIntroductionPhase ? 'Yes' : 'No'})`;
     }
 
     /**
@@ -203,7 +228,8 @@ ${interviewType === 'hr' ? this.getHRInstructions(promptEngineer, config) : ''}
 
 **DSA PROBLEM INTEGRATION:**
 - After 3-4 questions, introduce a DSA problem: "Now let's work on a coding problem together."
-- When introducing DSA, set "showDSAProblem": true in your response
+- **IMPORTANT:** When introducing the FIRST DSA problem, set "showDSAProblem": true in your response
+- **IMPORTANT:** Before introducing DSA, keep "showDSAProblem": false
 - Choose an appropriate problem based on their experience level
 - The problem will be displayed on the right side with a code editor
 - Guide them through the problem-solving process
@@ -212,7 +238,8 @@ ${interviewType === 'hr' ? this.getHRInstructions(promptEngineer, config) : ''}
 ${resumeText.substring(0, 500)}...
 
 **Current Round:** ${currentRound}
-**DSA Introduction Timing:** Introduce DSA problem around round 4-5`;
+**DSA Introduction Timing:** Introduce DSA problem around round 4-5
+**showDSAProblem Flag:** Set to true ONLY when introducing the first DSA problem`;
     }
 
     /**
@@ -233,7 +260,8 @@ ${resumeText.substring(0, 500)}...
 
 **CODING INTEGRATION:**
 - After 2-3 questions, introduce a coding problem: "Let's work on a small coding challenge."
-- When introducing coding, set "showDSAProblem": true in your response
+- **IMPORTANT:** When introducing the FIRST coding problem, set "showDSAProblem": true in your response
+- **IMPORTANT:** Before introducing coding, keep "showDSAProblem": false
 - Choose a simple problem appropriate for their level
 - The problem will be displayed on the right side with a code editor
 - Guide them through the solution
@@ -242,7 +270,8 @@ ${resumeText.substring(0, 500)}...
 ${resumeText.substring(0, 500)}...
 
 **Current Round:** ${currentRound}
-**Coding Introduction Timing:** Introduce coding around round 3-4`;
+**Coding Introduction Timing:** Introduce coding around round 3-4
+**showDSAProblem Flag:** Set to true ONLY when introducing the first coding problem`;
     }
 
     /**
@@ -348,8 +377,7 @@ You are wrapping up the interview at ${name}. The interview has been running for
                     phase: parsed.phase || 'general',
                     shouldMoveToNextProblem: parsed.shouldMoveToNextProblem || false,
                     showDSAProblem: parsed.showDSAProblem || false,
-                    isWrapUp: parsed.isWrapUp || false,
-                    timeContext: parsed.timeContext || ''
+                    isWrapUp: parsed.isWrapUp || false
                 };
             }
             
@@ -359,8 +387,7 @@ You are wrapping up the interview at ${name}. The interview has been running for
                 phase: 'general',
                 shouldMoveToNextProblem: false,
                 showDSAProblem: false,
-                isWrapUp: false,
-                timeContext: ''
+                isWrapUp: false
             };
         } catch (error) {
             console.error('Error parsing AI response:', error);
@@ -369,8 +396,7 @@ You are wrapping up the interview at ${name}. The interview has been running for
                 phase: 'general',
                 shouldMoveToNextProblem: false,
                 showDSAProblem: false,
-                isWrapUp: false,
-                timeContext: ''
+                isWrapUp: false
             };
         }
     }

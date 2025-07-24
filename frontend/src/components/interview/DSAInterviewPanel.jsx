@@ -37,7 +37,7 @@ const DSAInterviewPanel = ({
       const response = await interviewService.submitCode(sessionId, userCode, codeLanguage);
       
       if (response.nextQuestion && onNextQuestionFromCode) {
-        onNextQuestionFromCode(response.nextQuestion, response.round);
+        onNextQuestionFromCode(response.nextQuestion, response.round, response.shouldMoveToNextProblem);
       }
       
       // Clear code editor after submission

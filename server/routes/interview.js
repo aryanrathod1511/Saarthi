@@ -7,7 +7,8 @@ import {
     getFinalFeedback,
     submitCode,
     getDSAProblems,
-    getCurrentProblem
+    getCurrentProblem,
+    terminateSession
 } from "../controllers/interviewController.js";
 import { 
     handleResumeUploadError, 
@@ -30,5 +31,6 @@ router.post("/summary", getFinalFeedback);
 router.post("/submit-code", submitCode);
 router.get("/dsa-problems", getDSAProblems);
 router.get("/current-problem", getCurrentProblem);
+router.post("/terminate", terminateSession);
 
 export default router;

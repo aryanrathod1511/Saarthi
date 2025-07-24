@@ -13,6 +13,7 @@ if (!GEMINI_API_KEY) {
 
 // Updated model endpoints - using current Gemini API models
 const GEMINI_MODELS = [
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
     "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent",
     "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent",
     "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent"
