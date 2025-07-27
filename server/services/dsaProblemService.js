@@ -13,7 +13,7 @@ class DSAProblemService {
 
     loadProblems() {
         try {
-            const problemsPath = path.join(__dirname, '../data/detailed_problems.json');
+            const problemsPath = path.join(__dirname, '../data/detailed_problems_with_html.json');
             const problemsData = fs.readFileSync(problemsPath, 'utf8');
             return JSON.parse(problemsData);
         } catch (error) {
@@ -91,12 +91,12 @@ class DSAProblemService {
         return this.problems.find(problem => problem.slug === slug);
     }
 
-    // Get problems with specific difficulty
+    
     getProblemsByDifficulty(difficulty) {
         return this.problems.filter(problem => problem.difficulty === difficulty);
     }
 
-    // Get problems with specific topics
+    
     getProblemsByTopics(topics) {
         if (!Array.isArray(topics)) {
             topics = [topics];

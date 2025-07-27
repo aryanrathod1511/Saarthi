@@ -8,11 +8,6 @@ dotenv.config();
 
 const execAsync = promisify(exec);
 
-/**
- * Analyse tone and extract 6 key metrics using openSMILE
- * @param {string} audioFilePath - Path to the audio file
- * @returns {Promise<Object>} - Tone matrix with 6 metrics (1-10 scale)
- */
 export const analyzeTone = async (audioFilePath) => {
   try {
     console.log("Entered");

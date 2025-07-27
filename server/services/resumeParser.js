@@ -32,12 +32,10 @@ const extractFromPDF = async (filePath) => {
             throw new Error('No text extracted from PDF');
         }
         
-        console.log('PDF text extracted successfully, length:', stdout.length);
-        
         return stdout;
     } catch (error) {
         console.error('pdftotext failed:', error.message);
-        throw new Error(`PDF parsing failed: ${error.message}. Please ensure pdftotext is installed and the file is readable.`);
+        throw new Error(`PDF parsing failed: ${error.message}.`);
     }
 };
 
@@ -53,7 +51,9 @@ const extractBasicName = (text) => {
             !line.toLowerCase().includes('cv') &&
             !line.toLowerCase().includes('phone') &&
             !line.toLowerCase().includes('email') &&
-            !line.toLowerCase().includes('linkedin')) {
+            !line.toLowerCase().includes('linkedin') &&
+            !line.toLowerCase().includes('github') &&
+            !line.toLowerCase().includes('portfolio')) {
             return line;
         }
     }

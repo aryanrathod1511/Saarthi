@@ -1,19 +1,14 @@
-import * as gemini from "../services/gemini.js";
 import fs from "fs";
-import path from "path";
 import speechToText from "../services/speechToText.js";
 import { analyzeTone } from "../services/openSmile.js";
 import parseResume from "../services/resumeParser.js";
 import {PromptEngineer} from "../services/promptEngineer.js";
 import { v4 as uuidv4 } from 'uuid';
 import {createSession, getSession, deleteSession, hasSession} from "../services/sessionManager.js";
-import { ask, generateInterviewAnalysis } from "../services/gemini.js";
-
+import { generateInterviewAnalysis } from "../services/gemini.js";
 import dsaProblemService from "../services/dsaProblemService.js";
 import codeEvaluationService from "../services/codeEvaluationService.js";
 import interviewFlowService from "../services/interviewFlowService.js";
-
-
 
 
 export const uploadResume = async (req, res) => {
@@ -24,7 +19,6 @@ export const uploadResume = async (req, res) => {
             });
         }
         
-        console.log('Processing resume upload...');
         const resumePath = req.file.path;
         
         // Parse the resume - just get the text
@@ -109,10 +103,10 @@ export const processAudio = async (req, res) => {
 
         console.log('Processing audio file:', audioPath);
 
-        // Process USER audio for speech-to-text and tone analysis
+        // Process USER audio
         const [transcriptResult, toneResult] = await Promise.allSettled([
-            speechToText.speechToText(audioPath),
-            analyzeTone(audioPath) // Analyze USER audio tone
+            speechToText(audioPath),
+            analyzeTone(audioPath) 
         ]);
 
         // Handle transcript result
@@ -122,7 +116,6 @@ export const processAudio = async (req, res) => {
             console.log('Transcription successful:', finalTranscript);
         } else {
             console.error('Transcription failed:', transcriptResult.reason);
-            // Return a meaningful error message instead of fallback
             finalTranscript = "Could not transcribe audio. Please try speaking again.";
         }
 
@@ -168,8 +161,6 @@ export const processAudio = async (req, res) => {
     }
 };
 
-
-
 export const nextQuestion = async (req, res) => {
     try {
         const { sessionId, transcript, toneMatrix, round, code } = req.body;
@@ -211,12 +202,13 @@ export const nextQuestion = async (req, res) => {
             transcript: transcript,
             toneMetrics: toneMatrix || {},
             elapsedMinutes: elapsedMinutes,
-            currentProblem: currentProblem  // Add the current problem to context
+            currentProblem: currentProblem,
+            dsaProblemContext: currentProblem ? `DSA Problem: ${currentProblem.title} - ${currentProblem.description}` : null
         };
 
         const nextQuestionResponse = await interviewFlowService.generateNextQuestion(promptEngineer, context);
 
-        // Update context with the new question
+      
         promptEngineer.updateContext({
             currentRound: (promptEngineer.interviewContext.questionHistory.length + 1),
             currentQuestion: nextQuestionResponse.question
@@ -342,21 +334,13 @@ export const getFinalFeedback = async (req, res) => {
             });
         }
 
-        console.log('Generating detailed summary for interview context');
-
         // Extract data from interview context
         const aiQuestions = interviewContext.questionHistory;
         const userResponses = interviewContext.candidateResponses || [];
         const toneAnalysis = interviewContext.toneAnalysis || [];
-
-        console.log('AI Questions:', aiQuestions.length);
-        console.log('User Responses:', userResponses.length);
-        console.log('Tone Analysis:', toneAnalysis.length);
-
-        // Get company info
         const currentCompanyInfo = promptEngineer.companyInfo;
 
-        // Prepare interview data for analysis
+       
         const interviewData = {
             aiQuestions,
             userResponses,
@@ -365,18 +349,10 @@ export const getFinalFeedback = async (req, res) => {
             candidateName: promptEngineer.resumeData?.name || 'Not specified',
             totalRounds: aiQuestions.length
         };
-
-        console.log('Sending interview data to Gemini for analysis...');
         
-        // Generate detailed summary using the new generateInterviewAnalysis function
         const summary = await generateInterviewAnalysis(interviewData, currentCompanyInfo);
-
-        console.log('Summary generated successfully, length:', summary.length);
-
-        // Delete the session
         deleteSession(sessionId);
 
-        // Delete resume file if it exists
         try {
             const resumePath = promptEngineer.resumeData?.filePath;
             if (resumePath && fs.existsSync(resumePath)) {
@@ -400,7 +376,6 @@ export const getFinalFeedback = async (req, res) => {
     }
 };
 
-// DSA-specific controller functions
 
 export const getDSAProblems = async (req, res) => {
     try {
@@ -413,24 +388,7 @@ export const getDSAProblems = async (req, res) => {
             });
         }
 
-        // Check if this is a DSA interview
-        if (promptEngineer.interviewContext.interviewType.toLowerCase() !== 'dsa') {
-            return res.status(400).json({
-                error: 'This endpoint is only available for DSA interviews'
-            });
-        }
-
-        // Get or generate DSA problems for this session
         let dsaProblems = promptEngineer.interviewContext.dsaProblems;
-        
-        if (!dsaProblems) {
-            // Generate 4 random problems
-            dsaProblems = dsaProblemService.selectRandomProblems(4);
-            
-            // Store in session
-            promptEngineer.interviewContext.dsaProblems = dsaProblems;
-            promptEngineer.interviewContext.currentProblemIndex = 0;
-        }
 
         res.status(200).json({
             problems: dsaProblems,
@@ -481,7 +439,7 @@ export const getCurrentProblem = async (req, res) => {
 
 export const submitCode = async (req, res) => {
     try {
-        const { sessionId, code, language = 'javascript' } = req.body;
+        const { sessionId, code, language = 'java' } = req.body;
 
         if (!sessionId || !code) {
             return res.status(400).json({
@@ -494,13 +452,6 @@ export const submitCode = async (req, res) => {
         if (!promptEngineer) {
             return res.status(400).json({
                 error: 'Interview not initialized. Please upload resume first.'
-            });
-        }
-
-        // Check if this is a DSA interview
-        if (promptEngineer.interviewContext.interviewType.toLowerCase() !== 'dsa') {
-            return res.status(400).json({
-                error: 'Code submission is only available for DSA interviews'
             });
         }
 
@@ -518,12 +469,6 @@ export const submitCode = async (req, res) => {
         // Evaluate the code
         const evaluation = await codeEvaluationService.evaluateCode(code, currentProblem, language);
 
-        // Get the current question that was asked
-        const currentQuestion = promptEngineer.interviewContext.questionHistory[promptEngineer.interviewContext.questionHistory.length - 1];
-        
-        // Generate follow-up question based on evaluation
-        const followUp = await codeEvaluationService.generateFollowUpQuestion(evaluation, currentProblem, code, currentQuestion);
-
         // Store evaluation in session
         if (!promptEngineer.interviewContext.codeEvaluations) {
             promptEngineer.interviewContext.codeEvaluations = [];
@@ -538,9 +483,8 @@ export const submitCode = async (req, res) => {
             timestamp: new Date().toISOString()
         });
 
-        // Get both the DSA problem context and the AI's follow-up question
+        // Get the DSA problem context
         const dsaProblemContext = `DSA Problem: ${currentProblem.title} - ${currentProblem.description}`;
-        const aiFollowUpQuestion = currentQuestion || 'No specific question asked yet';
         
         // Generate next question using flow service
         const context = {
@@ -548,8 +492,7 @@ export const submitCode = async (req, res) => {
             toneMetrics: {},
             elapsedMinutes: Math.floor((new Date() - promptEngineer.interviewContext.startTime) / (1000 * 60)),
             currentProblem: currentProblem,
-            dsaProblemContext: dsaProblemContext,
-            aiFollowUpQuestion: aiFollowUpQuestion
+            dsaProblemContext: dsaProblemContext
         };
 
         const nextQuestionResponse = await interviewFlowService.generateNextQuestion(promptEngineer, context);
@@ -574,7 +517,6 @@ export const submitCode = async (req, res) => {
 
         res.status(200).json({
             evaluation: evaluation,
-            followUpQuestion: followUp,
             nextQuestion: nextQuestionResponse.question,
             currentProblem: currentProblem,
             currentIndex: currentIndex,
@@ -598,13 +540,8 @@ export const terminateSession = async (req, res) => {
     if (!sessionId) {
       return res.status(400).json({ error: 'Session ID is required' });
     }
-
-    console.log(`Terminating session: ${sessionId}`);
-    
-    // Delete the session
     deleteSession(sessionId);
-    
-    console.log(`Session ${sessionId} terminated successfully`);
+
 
     res.status(200).json({ 
       message: 'Session terminated successfully',
@@ -618,5 +555,3 @@ export const terminateSession = async (req, res) => {
     });
   }
 };
-
-

@@ -17,27 +17,17 @@ const CONFIG = {
   supportedFormats: ['.wav', '.mp3', '.m4a', '.webm']
 };
 
-/**
- * Production-ready speech-to-text service
- * @param {string} audioPath - Path to the audio file
- * @returns {Promise<string>} - Transcribed text
- */
-export const speechToText = async (audioPath) => {
+export default async function speechToText(audioPath) {
   try {
-    // Validate API key first
-    if (!ASSEMBLY_AI_API_KEY || ASSEMBLY_AI_API_KEY === 'your_assembly_ai_api_key_here') {
+    if (!ASSEMBLY_AI_API_KEY) {
       throw new Error('Assembly AI API key not configured. Please set ASSEMBLY_AI_API_KEY in your environment variables.');
     }
-
-    console.log("Starting production speech-to-text processing for:", audioPath);
     
-    // Validate audio file
     await validateAudioFile(audioPath);
     
     // Read the audio file
     const audioFile = fs.readFileSync(audioPath);
-    console.log(`Audio file loaded: ${audioFile.length} bytes`);
-    
+
     // Upload the audio file to Assembly AI
     const uploadUrl = await uploadAudioFile(audioFile);
     console.log("Audio uploaded successfully:", uploadUrl);
@@ -54,14 +44,10 @@ export const speechToText = async (audioPath) => {
     
   } catch (error) {
     console.error("Error in speechToText:", error);
-    throw error; // Re-throw to let caller handle the error
+    throw error;
   }
 };
 
-/**
- * Validate audio file before processing
- * @param {string} audioPath - Path to audio file
- */
 const validateAudioFile = async (audioPath) => {
   try {
     const stats = fs.statSync(audioPath);
@@ -84,17 +70,11 @@ const validateAudioFile = async (audioPath) => {
       console.warn(`Unsupported audio format: .${ext}`);
     }
     
-    console.log(`Audio file validation passed: ${stats.size} bytes`);
   } catch (error) {
     throw new Error(`Audio file validation failed: ${error.message}`);
   }
 };
 
-/**
- * Upload audio file to Assembly AI
- * @param {Buffer} audioFile - Audio file buffer
- * @returns {Promise<string>} - Upload URL
- */
 const uploadAudioFile = async (audioFile) => {
   try {
     const response = await axios.post(
@@ -129,11 +109,6 @@ const uploadAudioFile = async (audioFile) => {
   }
 };
 
-/**
- * Submit transcription request to Assembly AI
- * @param {string} uploadUrl - Uploaded audio URL
- * @returns {Promise<string>} - Transcription ID
- */
 const submitTranscription = async (uploadUrl) => {
   try {
     const response = await axios.post(
@@ -150,7 +125,6 @@ const submitTranscription = async (uploadUrl) => {
         auto_chapters: false,
         sentiment_analysis: false,
         content_safety: false,
-        // Fixed boost_param value
         boost_param: "high",
         word_boost: ["interview", "question", "answer", "problem", "solution", "algorithm", "code", "system", "design"],
         filter_profanity: false
@@ -183,11 +157,7 @@ const submitTranscription = async (uploadUrl) => {
   }
 };
 
-/**
- * Poll for transcription completion
- * @param {string} transcriptId - Transcription ID
- * @returns {Promise<string>} - Transcribed text
- */
+
 const pollForCompletion = async (transcriptId) => {
   let attempts = 0;
   
@@ -199,7 +169,7 @@ const pollForCompletion = async (transcriptId) => {
           headers: {
             'Authorization': ASSEMBLY_AI_API_KEY
           },
-          timeout: 10000 // 10 second timeout for status checks
+          timeout: 10000
         }
       );
       
@@ -242,12 +212,6 @@ const pollForCompletion = async (transcriptId) => {
   throw new Error(`Transcription timed out after ${CONFIG.maxPollAttempts} attempts`);
 };
 
-export const fallbackSpeechToText = async (audioPath) => {
-  console.log('Using fallback speech-to-text');
-  throw new Error('Speech-to-text service is not available. Please check your Assembly AI API configuration.');
-};
-
-export default { speechToText };
 
 
 

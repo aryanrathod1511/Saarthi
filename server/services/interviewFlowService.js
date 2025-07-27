@@ -5,47 +5,40 @@ class InterviewFlowService {
     constructor() {
         this.interviewTypes = {
             'dsa': {
-                maxDuration: 50, // 50 minutes
-                wrapUpThreshold: 45, // Start wrapping up at 45 minutes
+                maxDuration: 50,
+                wrapUpThreshold: 45,
                 problemsCount: 4,
                 phases: ['introduction', 'problem_solving', 'wrap_up']
             },
-            'resume_cs': {
-                maxDuration: 20, // 20 minutes
-                wrapUpThreshold: 18, // Start wrapping up at 18 minutes
+            'resume_cs_fundamentals': {
+                maxDuration: 30,
+                wrapUpThreshold: 28,
                 phases: ['introduction', 'resume_discussion', 'technical_fundamentals', 'wrap_up']
             },
-            'technical_hr': {
-                maxDuration: 20, // 20 minutes
-                wrapUpThreshold: 18, // Start wrapping up at 18 minutes
+            'technical_behavioral': {
+                maxDuration: 20,
+                wrapUpThreshold: 18,
                 phases: ['introduction', 'technical_assessment', 'behavioral_assessment', 'wrap_up']
             },
-            'hr': {
-                maxDuration: 20, // 20 minutes
-                wrapUpThreshold: 18, // Start wrapping up at 18 minutes
+            'behavioral': {
+                maxDuration: 20,
+                wrapUpThreshold: 18,
                 phases: ['introduction', 'behavioral_assessment', 'cultural_fit', 'wrap_up']
             }
         };
     }
 
-    /**
-     * Get interview configuration for a specific type
-     */
+   
     getInterviewConfig(interviewType) {
-        return this.interviewTypes[interviewType.toLowerCase()] || this.interviewTypes['technical_hr'];
+        return this.interviewTypes[interviewType.toLowerCase()] || this.interviewTypes['technical_behavioral'];
     }
 
-    /**
-     * Check if interview should wrap up based on time
-     */
+    
     shouldWrapUp(interviewType, elapsedMinutes) {
         const config = this.getInterviewConfig(interviewType);
         return elapsedMinutes >= config.wrapUpThreshold;
     }
 
-    /**
-     * Generate welcome message for interview start
-     */
     async generateWelcomeMessage(promptEngineer) {
         const { interviewType, experienceLevel } = promptEngineer.interviewContext;
         const { name, type, role } = promptEngineer.companyInfo;
@@ -62,7 +55,7 @@ You are starting a ${interviewType.toUpperCase()} interview at ${name}.
 - Experience Level: ${experienceLevel}
 
 **Your Task:**
-1. **Welcome the candidate warmly** - "Hi ${candidateName}, I'm [Your Name] from ${name}. Thanks for joining us today."
+1. **Welcome the candidate warmly** - "Hi ${candidateName}, I'm [Select an indian name (male or female)] from ${name}. Thanks for joining us today."
 2. **Introduce yourself** briefly
 3. **Set interview expectations** - mention this is a ${interviewType} interview for ${role} position
 4. **Ask for their brief introduction** - name, background, what interests them about this role
@@ -70,7 +63,7 @@ You are starting a ${interviewType.toUpperCase()} interview at ${name}.
 
 ${interviewType === 'dsa' ? `
 **DSA INTERVIEW SPECIFIC:**
-- After their introduction, mention: "We'll be working through 4 coding problems together. Each problem will be displayed on your screen with a code editor where you can write and submit your solutions."
+- After their introduction response, mention: "We'll be working through 4 coding problems together. Each problem will be displayed on your screen with a code editor where you can write and submit your solutions."
 - Explain the format: "For each problem, you'll see the problem statement, sample test cases, and a code editor on the right side of your screen."
 ` : ''}
 
@@ -88,17 +81,15 @@ ${interviewType === 'dsa' ? `
         return this.cleanAIResponse(aiResponse);
     }
 
-    /**
-     * Generate next question based on interview type and context
-     */
+
     async generateNextQuestion(promptEngineer, context = {}) {
         const { interviewType, currentPhase, experienceLevel } = promptEngineer.interviewContext;
         const { name, type, role } = promptEngineer.companyInfo;
-        const { transcript, toneMetrics, elapsedMinutes, currentProblem, dsaProblemContext, aiFollowUpQuestion } = context;
+        const { transcript, toneMetrics, elapsedMinutes, currentProblem, dsaProblemContext } = context;
         const candidateName = promptEngineer.resumeData?.name || 'the candidate';
         const config = this.getInterviewConfig(interviewType);
 
-        // Check if we should wrap up
+        
         if (this.shouldWrapUp(interviewType, elapsedMinutes)) {
             return await this.generateWrapUpQuestion(promptEngineer, context);
         }
@@ -121,18 +112,16 @@ ${interviewType === 'dsa' ? `
 
 ${dsaProblemContext ? `
 **DSA PROBLEM CONTEXT:**
-- ${dsaProblemContext}
-- AI Follow-up Question: "${aiFollowUpQuestion || 'No specific follow-up question'}"
-` : ''}
+- ${dsaProblemContext}` : ''}
 
 **IMPORTANT:** The candidate is responding to the question above. Your next question should be a natural follow-up or continuation based on their response.
 
 **INTERVIEW TYPE SPECIFIC INSTRUCTIONS:**
 
 ${interviewType === 'dsa' ? this.getDSAInstructions(promptEngineer, config) : ''}
-${interviewType === 'resume_cs' ? this.getResumeCSInstructions(promptEngineer, config) : ''}
-${interviewType === 'technical_hr' ? this.getTechnicalHRInstructions(promptEngineer, config) : ''}
-${interviewType === 'hr' ? this.getHRInstructions(promptEngineer, config) : ''}
+${interviewType === 'resume_cs_fundamentals' ? this.getResumeCSInstructions(promptEngineer, config) : ''}
+${interviewType === 'technical_behavioral' ? this.getTechnicalHRInstructions(promptEngineer, config) : ''}
+${interviewType === 'behavioral' ? this.getHRInstructions(promptEngineer, config) : ''}
 
 **RESPONSE FORMAT - JSON ONLY:**
 {
@@ -149,8 +138,7 @@ ${interviewType === 'hr' ? this.getHRInstructions(promptEngineer, config) : ''}
 - Adapt difficulty based on their performance
 - Keep track of time and phase progression
 - **IMPORTANT:** Set "showDSAProblem": false during introduction phase
-- **IMPORTANT:** Set "showDSAProblem": true ONLY when introducing the first DSA/coding problem for resume_cs and technical_hr interviews
-- For DSA interviews, always set "showDSAProblem": true since problems are always shown
+- **IMPORTANT:** Set "showDSAProblem": true ONLY when introducing the first DSA/coding problem for resume_cs_fundamentals and technical_behavioral interviews and DSA interviews
 - **CRITICAL:** NEVER set "shouldMoveToNextProblem": true during introduction phase (first 2 rounds)
 - **CRITICAL:** Only set "shouldMoveToNextProblem": true when thoroughly discussing the current problem and ready to move to the next one`;
 
@@ -167,13 +155,10 @@ ${interviewType === 'hr' ? this.getHRInstructions(promptEngineer, config) : ''}
             };
         }
         
-        // Fallback to parseAIResponse for string responses
-        return this.parseAIResponse(aiResponse);
+        return this.cleanAIResponse(aiResponse);
     }
 
-    /**
-     * Generate DSA-specific instructions
-     */
+   
     getDSAInstructions(promptEngineer, config) {
         const currentRound = promptEngineer.interviewContext.questionHistory?.length || 0;
         const isIntroductionPhase = currentRound <= 2; // First 2 rounds are introduction
@@ -210,9 +195,6 @@ ${interviewType === 'hr' ? this.getHRInstructions(promptEngineer, config) : ''}
 - Current Round: ${currentRound} (Introduction: ${isIntroductionPhase ? 'Yes' : 'No'})`;
     }
 
-    /**
-     * Generate Resume + CS instructions
-     */
     getResumeCSInstructions(promptEngineer, config) {
         const resumeText = promptEngineer.resumeData?.rawText || '';
         const currentRound = promptEngineer.interviewContext.questionHistory?.length || 0;
@@ -221,7 +203,8 @@ ${interviewType === 'hr' ? this.getHRInstructions(promptEngineer, config) : ''}
 **RESUME + CS FUNDAMENTALS INTERVIEW:**
 - Focus on projects mentioned in their resume
 - Ask about technologies, challenges, and learning experiences
-- Include CS fundamentals questions (algorithms, data structures, system design)
+- Include CS fundamentals questions (Database management system, Operating system, Computer networks, OOPs, etc)
+-Do intensive discussions on the CS fundamnetals subjects mentioned above. also stir them with the project metioned.
 - Ask about their technical background and interests
 - Time management: ${config.maxDuration} minutes total
 - Current time: ${config.maxDuration} minutes remaining
@@ -235,16 +218,14 @@ ${interviewType === 'hr' ? this.getHRInstructions(promptEngineer, config) : ''}
 - Guide them through the problem-solving process
 
 **Resume Content:**
-${resumeText.substring(0, 500)}...
+${resumeText}
 
 **Current Round:** ${currentRound}
 **DSA Introduction Timing:** Introduce DSA problem around round 4-5
-**showDSAProblem Flag:** Set to true ONLY when introducing the first DSA problem`;
+**showDSAProblem Flag:** Set to true ONLY when introducing the first DSA problem after that set it to false`;
     }
 
-    /**
-     * Generate Technical + HR instructions
-     */
+    
     getTechnicalHRInstructions(promptEngineer, config) {
         const resumeText = promptEngineer.resumeData?.rawText || '';
         const currentRound = promptEngineer.interviewContext.questionHistory?.length || 0;
@@ -267,16 +248,14 @@ ${resumeText.substring(0, 500)}...
 - Guide them through the solution
 
 **Resume Content:**
-${resumeText.substring(0, 500)}...
+${resumeText}
 
 **Current Round:** ${currentRound}
 **Coding Introduction Timing:** Introduce coding around round 3-4
 **showDSAProblem Flag:** Set to true ONLY when introducing the first coding problem`;
     }
 
-    /**
-     * Generate HR instructions
-     */
+    
     getHRInstructions(promptEngineer, config) {
         return `
 **HR INTERVIEW:**
@@ -288,9 +267,7 @@ ${resumeText.substring(0, 500)}...
 - Current time: ${config.maxDuration} minutes remaining`;
     }
 
-    /**
-     * Generate wrap-up question
-     */
+    
     async generateWrapUpQuestion(promptEngineer, context) {
         const { name, role } = promptEngineer.companyInfo;
         const candidateName = promptEngineer.resumeData?.name || 'the candidate';
@@ -327,11 +304,9 @@ You are wrapping up the interview at ${name}. The interview has been running for
         };
     }
 
-    /**
-     * Clean AI response
-     */
+
     cleanAIResponse(response) {
-        // Handle object response from gemini.ask
+        
         if (response && typeof response === 'object' && response.question) {
             return {
                 question: response.question,
@@ -355,55 +330,12 @@ You are wrapping up the interview at ${name}. The interview has been running for
                 feedback: ''
             };
         }
-
-        // Fallback for invalid responses
         return {
             question: 'Could you please elaborate on that?',
             feedback: ''
         };
     }
 
-    /**
-     * Parse AI response to extract structured data
-     */
-    parseAIResponse(response) {
-        try {
-            // Try to extract JSON from the response
-            const jsonMatch = response.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                const parsed = JSON.parse(jsonMatch[0]);
-                return {
-                    question: parsed.question || response,
-                    phase: parsed.phase || 'general',
-                    shouldMoveToNextProblem: parsed.shouldMoveToNextProblem || false,
-                    showDSAProblem: parsed.showDSAProblem || false,
-                    isWrapUp: parsed.isWrapUp || false
-                };
-            }
-            
-            // Fallback: return the response as a question
-            return {
-                question: response,
-                phase: 'general',
-                shouldMoveToNextProblem: false,
-                showDSAProblem: false,
-                isWrapUp: false
-            };
-        } catch (error) {
-            console.error('Error parsing AI response:', error);
-            return {
-                question: response,
-                phase: 'general',
-                shouldMoveToNextProblem: false,
-                showDSAProblem: false,
-                isWrapUp: false
-            };
-        }
-    }
-
-    /**
-     * Format tone analysis for AI context
-     */
     formatToneAnalysis(toneMetrics) {
         if (!toneMetrics || Object.keys(toneMetrics).length === 0) {
             return 'No tone data available';

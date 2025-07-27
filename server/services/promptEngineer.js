@@ -1,8 +1,4 @@
 
-/**
- * Simplified prompt engineering for interview simulation
- * Core functionality for system prompts and context management
- */
 export class PromptEngineer {
     constructor(resumeData = null, companyInfo = null, duration = 30, experienceLevel = 'Entry') {
         this.resumeData = resumeData;
@@ -61,22 +57,16 @@ export class PromptEngineer {
         this.interviewContext.currentTime = new Date().getTime();
     }
 
-    /**
-     * Get the base system prompt for AI
-     */
     getSystemPrompt() {
         return this.getBaseSystemPrompt() + 
                this.getCompanyContext() + 
                this.getResumeContext();
     }
 
-    /**
-     * Generate base system prompt
-     */
     getBaseSystemPrompt() {
         return `**INTERVIEW CONDUCTOR AI - SYSTEM PROMPT**
 
-You are an expert technical interviewer conducting a professional interview. Your role is to:
+You are an expert technical interviewer for ${this.companyInfo.name} (Choose an indian name (male or female) for yourself) conducting a professional interview. Your role is to:
 
 **CORE RESPONSIBILITIES:**
 1. **Conduct natural, conversational interviews** - Make candidates feel comfortable while maintaining professionalism
@@ -108,9 +98,6 @@ You are an expert technical interviewer conducting a professional interview. You
 - Adapt your style to the interview type and company culture`;
     }
 
-    /**
-     * Get company context for AI
-     */
     getCompanyContext() {
         const { name, type, industry, role, level } = this.companyInfo;
         
@@ -128,9 +115,6 @@ You are an expert technical interviewer conducting a professional interview. You
 - **Current Phase**: ${this.interviewContext.currentPhase}`;
     }
 
-    /**
-     * Get resume context for AI
-     */
     getResumeContext() {
         if (!this.resumeData || !this.resumeData.rawText) {
             return `
@@ -147,9 +131,7 @@ You are an expert technical interviewer conducting a professional interview. You
 - **Resume Summary**: ${resumeText}...`;
     }
 
-    /**
-     * Detect experience level from resume text
-     */
+   
     detectExperienceLevel(resumeText) {
         const text = resumeText.toLowerCase();
         
