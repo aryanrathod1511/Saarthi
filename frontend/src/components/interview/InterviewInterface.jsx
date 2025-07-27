@@ -60,7 +60,7 @@ const InterviewInterface = ({
 
         {/* Right side - DSA Problem & Code Editor or Non-DSA Panel */}
         <div>
-          {interviewType === 'dsa' || showDSAProblem ? (
+          {interviewType === 'dsa' ? (
             <div className="space-y-6">
               <QuestionStatement
                 interviewType={interviewType}

@@ -1,227 +1,203 @@
-import React, { createContext, useContext, useReducer } from 'react';
+import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import { useAuth } from './AuthContext.jsx';
+import interviewService from '../services/interviewService.js';
+import toast from 'react-hot-toast';
 
 const InterviewContext = createContext();
 
 const initialState = {
-  isInterviewActive: false,
-  currentRound: 0,
-  candidateInfo: null,
-  currentQuestion: '',
-  questions: [],
-  questionHistory: [],
-  interviewType: 'dsa',
-  currentPhase: 'setup',
-  companyInfo: null,
-  isLoading: false,
-  error: null,
-  sessionId: null,
-  interviewProgress: {
-    totalRounds: 0,
-    completedRounds: 0,
-    currentPhase: 'setup'
-  }
+    currentInterview: null,
+    interviewHistory: [],
+    loading: false,
+    error: null,
+    // Add these for interview logic
+    currentQuestion: '',
+    questions: [],
+    currentRound: 0
 };
 
 const interviewReducer = (state, action) => {
-  switch (action.type) {
-    case 'START_INTERVIEW':
-      return {
-        ...state,
-        isInterviewActive: true,
-        currentRound: 1,
-        isLoading: false,
-        error: null,
-        currentPhase: 'interview'
-      };
-
-    case 'END_INTERVIEW':
-      return {
-        ...state,
-        isInterviewActive: false,
-        currentRound: 0,
-        currentQuestion: '',
-        questions: [],
-        questionHistory: [],
-        currentPhase: 'setup',
-        isLoading: false,
-        sessionId: null
-      };
-
-    case 'SET_CURRENT_QUESTION':
-      return {
-        ...state,
-        currentQuestion: action.payload,
-        isLoading: false
-      };
-
-    case 'ADD_QUESTION':
-      return {
-        ...state,
-        questions: [...state.questions, action.payload],
-        questionHistory: [...state.questionHistory, {
-          question: action.payload,
-          round: state.currentRound,
-          timestamp: new Date().toISOString()
-        }]
-      };
-
-    case 'SET_CURRENT_ROUND':
-      return {
-        ...state,
-        currentRound: action.payload
-      };
-
-    case 'SET_INTERVIEW_TYPE':
-      return {
-        ...state,
-        interviewType: action.payload,
-        currentPhase: 'setup'
-      };
-
-    case 'SET_CURRENT_PHASE':
-      return {
-        ...state,
-        currentPhase: action.payload
-      };
-
-    case 'SET_COMPANY_INFO':
-      return {
-        ...state,
-        companyInfo: action.payload
-      };
-
-    case 'SET_SESSION_ID':
-      return {
-        ...state,
-        sessionId: action.payload
-      };
-
-    case 'SET_INTERVIEW_PROGRESS':
-      return {
-        ...state,
-        interviewProgress: {
-          ...state.interviewProgress,
-          ...action.payload
-        }
-      };
-
-    case 'SET_LOADING':
-      return {
-        ...state,
-        isLoading: action.payload
-      };
-
-    case 'SET_ERROR':
-      return {
-        ...state,
-        error: action.payload,
-        isLoading: false
-      };
-
-    case 'SET_QUESTIONS':
-      return {
-        ...state,
-        questions: action.payload
-      };
-
-    case 'RESET_INTERVIEW':
-      return {
-        ...initialState
-      };
-
-    default:
-      return state;
-  }
+    switch (action.type) {
+        case 'SET_LOADING':
+            return { ...state, loading: action.payload };
+        case 'SET_ERROR':
+            return { ...state, error: action.payload, loading: false };
+        case 'SET_CURRENT_INTERVIEW':
+            return { ...state, currentInterview: action.payload, loading: false };
+        case 'SET_INTERVIEW_HISTORY':
+            return { ...state, interviewHistory: action.payload, loading: false };
+        case 'SET_CURRENT_QUESTION':
+            return { ...state, currentQuestion: action.payload };
+        case 'ADD_QUESTION':
+            return {
+                ...state,
+                questions: [...(state.questions || []), action.payload]
+            };
+        case 'SET_CURRENT_ROUND':
+            return { ...state, currentRound: action.payload };
+        case 'RESET_QUESTIONS':
+            return { ...state, questions: [], currentQuestion: '', currentRound: 0 };
+        case 'UPDATE_INTERVIEW_STATUS':
+            return {
+                ...state,
+                currentInterview: {
+                    ...state.currentInterview,
+                    status: action.payload
+                }
+            };
+        case 'CLEAR_CURRENT_INTERVIEW':
+            return { ...state, currentInterview: null };
+        default:
+            return state;
+    }
 };
 
 export const InterviewProvider = ({ children }) => {
-  const [state, dispatch] = useReducer(interviewReducer, initialState);
+    const [state, dispatch] = useReducer(interviewReducer, initialState);
+    const { isAuthenticated } = useAuth();
 
-  const startInterview = () => {
-    dispatch({ type: 'START_INTERVIEW' });
-  };
+    // Load interview history when user is authenticated
+    useEffect(() => {
+        if (isAuthenticated) {
+            loadInterviewHistory();
+        }
+    }, [isAuthenticated]);
 
-  const endInterview = () => {
-    dispatch({ type: 'END_INTERVIEW' });
-  };
+    const loadInterviewHistory = async () => {
+        if (!isAuthenticated) return;
 
-  const setCurrentQuestion = (question) => {
-    dispatch({ type: 'SET_CURRENT_QUESTION', payload: question });
-  };
+        dispatch({ type: 'SET_LOADING', payload: true });
+        try {
+            const response = await interviewService.getInterviewHistory();
+            dispatch({ type: 'SET_INTERVIEW_HISTORY', payload: response.interviews || [] });
+        } catch (error) {
+            console.error('Error loading interview history:', error);
+            dispatch({ type: 'SET_ERROR', payload: 'Failed to load interview history' });
+        }
+    };
 
-  const addQuestion = (question) => {
-    dispatch({ type: 'ADD_QUESTION', payload: question });
-  };
+    const createInterview = async (interviewData) => {
+        dispatch({ type: 'SET_LOADING', payload: true });
+        try {
+            const response = await interviewService.createInterview(interviewData);
+            dispatch({ type: 'SET_CURRENT_INTERVIEW', payload: response.interview });
+            toast.success('Interview created successfully!');
+            return response.interview;
+        } catch (error) {
+            console.error('Error creating interview:', error);
+            dispatch({ type: 'SET_ERROR', payload: 'Failed to create interview' });
+            toast.error('Failed to create interview');
+            throw error;
+        }
+    };
 
-  const setCurrentRound = (round) => {
-    dispatch({ type: 'SET_CURRENT_ROUND', payload: round });
-  };
+    const startInterview = async (interviewData) => {
+        dispatch({ type: 'SET_LOADING', payload: true });
+        try {
+            const response = await interviewService.startInterview(interviewData);
+            dispatch({ type: 'SET_CURRENT_INTERVIEW', payload: response.interview });
+            toast.success('Interview started!');
+            return response.interview;
+        } catch (error) {
+            console.error('Error starting interview:', error);
+            dispatch({ type: 'SET_ERROR', payload: 'Failed to start interview' });
+            toast.error('Failed to start interview');
+            throw error;
+        }
+    };
 
-  const setInterviewType = (type) => {
-    dispatch({ type: 'SET_INTERVIEW_TYPE', payload: type });
-  };
+    const submitAnswer = async (answerData) => {
+        dispatch({ type: 'SET_LOADING', payload: true });
+        try {
+            const response = await interviewService.submitAnswer(answerData);
+            toast.success('Answer submitted!');
+            return response;
+        } catch (error) {
+            console.error('Error submitting answer:', error);
+            dispatch({ type: 'SET_ERROR', payload: 'Failed to submit answer' });
+            toast.error('Failed to submit answer');
+            throw error;
+        }
+    };
 
-  const setCurrentPhase = (phase) => {
-    dispatch({ type: 'SET_CURRENT_PHASE', payload: phase });
-  };
+    const evaluateCode = async (codeData) => {
+        dispatch({ type: 'SET_LOADING', payload: true });
+        try {
+            const response = await interviewService.evaluateCode(codeData);
+            toast.success('Code evaluated!');
+            return response;
+        } catch (error) {
+            console.error('Error evaluating code:', error);
+            dispatch({ type: 'SET_ERROR', payload: 'Failed to evaluate code' });
+            toast.error('Failed to evaluate code');
+            throw error;
+        }
+    };
 
-  const setCompanyInfo = (info) => {
-    dispatch({ type: 'SET_COMPANY_INFO', payload: info });
-  };
+    const endInterview = async (interviewId) => {
+        dispatch({ type: 'SET_LOADING', payload: true });
+        try {
+            const response = await interviewService.endInterview(interviewId);
+            dispatch({ type: 'UPDATE_INTERVIEW_STATUS', payload: 'completed' });
+            toast.success('Interview ended!');
+            return response;
+        } catch (error) {
+            console.error('Error ending interview:', error);
+            dispatch({ type: 'SET_ERROR', payload: 'Failed to end interview' });
+            toast.error('Failed to end interview');
+            throw error;
+        }
+    };
 
-  const setSessionId = (sessionId) => {
-    dispatch({ type: 'SET_SESSION_ID', payload: sessionId });
-  };
+    const clearCurrentInterview = () => {
+        dispatch({ type: 'CLEAR_CURRENT_INTERVIEW' });
+        dispatch({ type: 'RESET_QUESTIONS' });
+    };
 
-  const setInterviewProgress = (progress) => {
-    dispatch({ type: 'SET_INTERVIEW_PROGRESS', payload: progress });
-  };
+    // Add these functions for interview logic
+    const setCurrentQuestion = (question) => {
+        dispatch({ type: 'SET_CURRENT_QUESTION', payload: question });
+    };
 
-  const setLoading = (loading) => {
-    dispatch({ type: 'SET_LOADING', payload: loading });
-  };
+    const addQuestion = (question, type = 'question') => {
+        dispatch({ type: 'ADD_QUESTION', payload: { question, type, timestamp: Date.now() } });
+    };
 
-  const setError = (error) => {
-    dispatch({ type: 'SET_ERROR', payload: error });
-  };
+    const setCurrentRound = (round) => {
+        dispatch({ type: 'SET_CURRENT_ROUND', payload: round });
+    };
 
-  const setQuestions = (questions) => {
-    dispatch({ type: 'SET_QUESTIONS', payload: questions });
-  };
+    const resetQuestions = () => {
+        dispatch({ type: 'RESET_QUESTIONS' });
+    };
 
-  const resetInterview = () => {
-    dispatch({ type: 'RESET_INTERVIEW' });
-  };
+    const value = {
+        ...state,
+        loadInterviewHistory,
+        createInterview,
+        startInterview,
+        submitAnswer,
+        evaluateCode,
+        endInterview,
+        clearCurrentInterview,
+        // Add these for interview logic
+        setCurrentQuestion,
+        addQuestion,
+        setCurrentRound,
+        resetQuestions
+    };
 
-  const value = {
-    ...state,
-    startInterview,
-    endInterview,
-    setCurrentQuestion,
-    addQuestion,
-    setCurrentRound,
-    setInterviewType,
-    setCurrentPhase,
-    setCompanyInfo,
-    setSessionId,
-    setInterviewProgress,
-    setLoading,
-    setError,
-    resetInterview,
-    setQuestions
-  };
-
-  return (
-    <InterviewContext.Provider value={value}>
-      {children}
-    </InterviewContext.Provider>
-  );
+    return (
+        <InterviewContext.Provider value={value}>
+            {children}
+        </InterviewContext.Provider>
+    );
 };
 
 export const useInterview = () => {
-  const context = useContext(InterviewContext);
-  if (!context) {
-    throw new Error('useInterview must be used within an InterviewProvider');
-  }
-  return context;
+    const context = useContext(InterviewContext);
+    if (!context) {
+        throw new Error('useInterview must be used within an InterviewProvider');
+    }
+    return context;
 }; 

@@ -55,7 +55,7 @@ You are starting a ${interviewType.toUpperCase()} interview at ${name}.
 - Experience Level: ${experienceLevel}
 
 **Your Task:**
-1. **Welcome the candidate warmly** - "Hi ${candidateName}, I'm [Select an indian name (male or female)] from ${name}. Thanks for joining us today."
+1. **Welcome the candidate warmly** - "Hi ${candidateName}, I'm [Select an indian name (male only)] from ${name}. Thanks for joining us today."
 2. **Introduce yourself** briefly
 3. **Set interview expectations** - mention this is a ${interviewType} interview for ${role} position
 4. **Ask for their brief introduction** - name, background, what interests them about this role
@@ -146,11 +146,12 @@ ${interviewType === 'behavioral' ? this.getHRInstructions(promptEngineer, config
         
         // Fix: Handle the object response from ask() function
         if (aiResponse && typeof aiResponse === 'object' && aiResponse.question) {
+            console.log("AI Response : ", aiResponse.showDSAProblem);
             return {
                 question: aiResponse.question,
                 phase: aiResponse.phase || currentPhase,
                 shouldMoveToNextProblem: aiResponse.shouldMoveToNextProblem || false,
-                showDSAProblem: aiResponse.showDSAProblem || false,
+                showDSAProblem: aiResponse.showDSAProblem || true,
                 isWrapUp: aiResponse.isWrapUp || false
             };
         }

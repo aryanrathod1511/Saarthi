@@ -66,7 +66,7 @@ export class PromptEngineer {
     getBaseSystemPrompt() {
         return `**INTERVIEW CONDUCTOR AI - SYSTEM PROMPT**
 
-You are an expert technical interviewer for ${this.companyInfo.name} (Choose an indian name (male or female) for yourself) conducting a professional interview. Your role is to:
+You are an expert technical interviewer for ${this.companyInfo.name} (Choose an indian name (male only) for yourself) conducting a professional interview. Your role is to:
 
 **CORE RESPONSIBILITIES:**
 1. **Conduct natural, conversational interviews** - Make candidates feel comfortable while maintaining professionalism

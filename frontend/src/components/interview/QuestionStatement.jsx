@@ -54,11 +54,24 @@ const QuestionStatement = ({
           {interviewType === 'dsa' ? (
             // DSA Problem Statement
             <div>
-              <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
-                <p className="text-gray-700 leading-relaxed text-lg">
-                  {currentProblem?.description}
-                </p>
-              </div>
+              {/* Problem Title */}
+              {currentProblem?.title && (
+                <div className="mb-4">
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">{currentProblem.title}</h3>
+                  <div className="flex items-center space-x-4 text-sm text-gray-600">
+                  </div>
+                </div>
+              )}
+
+              {/* Problem Description with HTML */}
+              {currentProblem?.description && (
+                <div className="mb-6">
+                  <div 
+                    className="prose prose-lg max-w-none"
+                    dangerouslySetInnerHTML={{ __html: currentProblem.description }}
+                  />
+                </div>
+              )}
               
               {/* Input/Output Format */}
               {currentProblem?.inputFormat && (

@@ -91,3 +91,41 @@ export const resumeUpload = multer({
         fileSize: 5 * 1024 * 1024 // 5MB limit
     }
 });
+
+// Export the configuration object for backward compatibility
+export const multerConfig = {
+    storage: resumeStorage,
+    fileFilter: resumeFileFilter,
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 5MB limit
+    }
+};
+
+// Export error handler
+export const handleUploadError = (req, res, next) => {
+    resumeUpload.single("resume")(req, res, (err) => {
+        if (err instanceof multer.MulterError) {
+            // Multer-specific errors
+            if (err.code === 'LIMIT_FILE_SIZE') {
+                return res.status(400).json({ 
+                    error: 'Resume file too large (max 5MB)' 
+                });
+            }
+            if (err.code === 'LIMIT_FILE_COUNT') {
+                return res.status(400).json({ 
+                    error: 'Only one resume file allowed' 
+                });
+            }
+            return res.status(400).json({ 
+                error: `Upload error: ${err.message}` 
+            });
+        } else if (err) {
+            // Other errors (file type, etc.)
+            return res.status(400).json({ 
+                error: `File error: ${err.message}` 
+            });
+        }
+        // No error, proceed to controller
+        next();
+    });
+};

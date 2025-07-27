@@ -1,7 +1,33 @@
-export const formatTime = (seconds) => {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
+import { clsx } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+// Utility function to merge Tailwind classes
+export const cn = (...inputs) => {
+  return twMerge(clsx(inputs));
+};
+
+// Other utility functions can be added here
+export const formatDate = (date) => {
+  return new Date(date).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+};
+
+export const formatTime = (minutes) => {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+};
+
+export const truncateText = (text, maxLength = 100) => {
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
+};
+
+export const generateId = () => {
+  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 };
 
 export const typeWriter = (text, setDisplayedQuestion, speed = 50, onComplete = null) => {

@@ -1,172 +1,232 @@
-const API_BASE_URL = 'http://localhost:3000';
+import authService from './authService.js';
 
-export const interviewService = {
-  uploadResume: async (formData) => {
-    const response = await fetch(`${API_BASE_URL}/api/interview/upload-resume`, {
-      method: 'POST',
-      body: formData
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Upload failed: ${response.status}`);
+class InterviewService {
+    constructor() {
+        // Use relative URL since Vite proxy handles the routing
+        this.baseURL = '';
     }
-    
-    return response.json();
-  },
 
-  startInterview: async (sessionId, interviewType) => {
-    const response = await fetch(`${API_BASE_URL}/api/interview/start`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        sessionId,
-        interviewType
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Start interview failed: ${response.status}`);
+    getAuthHeaders() {
+        const token = localStorage.getItem('token');
+        return {
+            'Content-Type': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` })
+        };
     }
-    
-    return response.json();
-  },
 
-  getNextQuestion: async (sessionId, transcript, toneMatrix, round, code = null) => {
-    const response = await fetch(`${API_BASE_URL}/api/interview/next-question`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        sessionId,
-        transcript,
-        toneMatrix,
-        round,
-        code // Add code parameter
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Get next question failed: ${response.status}`);
+    async makeRequest(endpoint, options = {}) {
+        const url = `${this.baseURL}${endpoint}`;
+        const config = {
+            headers: this.getAuthHeaders(),
+            ...options
+        };
+
+        try {
+            const response = await fetch(url, config);
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            }
+            
+            return await response.json();
+        } catch (error) {
+            console.error('API request failed:', error);
+            throw error;
+        }
     }
-    
-    return response.json();
-  },
 
-  uploadAudio: async (audioBlob) => {
-    const formData = new FormData();
-    formData.append('audio', audioBlob, 'response.wav');
+    // Upload resume
+    async uploadResume(requestData) {
+        const token = localStorage.getItem('token');
+        const url = `${this.baseURL}/api/interview/upload-resume`;
+        
+        console.log('Uploading resume to:', url);
+        console.log('Request data structure:', {
+            hasResume: !!requestData.resume,
+            hasCompanyInfo: !!requestData.companyInfo,
+            interviewType: requestData.interviewType
+        });
+        
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            });
 
-    const response = await fetch(`${API_BASE_URL}/api/interview/upload`, {
-      method: 'POST',
-      body: formData
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Audio upload failed: ${response.status}`);
+            console.log('Response status:', response.status);
+            console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Error response body:', errorText);
+                
+                let errorData = {};
+                try {
+                    errorData = JSON.parse(errorText);
+                } catch (e) {
+                    errorData = { error: errorText };
+                }
+                
+                throw new Error(errorData.error || errorData.message || `HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('Upload successful:', result);
+            return result;
+        } catch (error) {
+            console.error('Upload failed:', error);
+            throw error;
+        }
     }
-    
-    return response.json();
-  },
 
-  getSummary: async (sessionId) => {
-    console.log('🔍 Calling getSummary API with sessionId:', sessionId);
-    
-    const response = await fetch(`${API_BASE_URL}/api/interview/summary`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        sessionId
-      })
-    });
-    
-    if (!response.ok) {
-      console.error('❌ getSummary API failed:', response.status, response.statusText);
-      throw new Error(`Get summary failed: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    console.log('✅ getSummary API response:', data);
-    
-    return data;
-  },
+    // Upload audio
+    async uploadAudio(blob) {
+        const token = localStorage.getItem('token');
+        const formData = new FormData();
+        formData.append('audio', blob, 'audio.wav');
+        
+        const url = `${this.baseURL}/api/interview/process-audio`;
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
 
-  // DSA-specific endpoints
-  getDSAProblems: async (sessionId) => {
-    const response = await fetch(`${API_BASE_URL}/api/interview/dsa-problems?sessionId=${sessionId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Get DSA problems failed: ${response.status}`);
-    }
-    
-    return response.json();
-  },
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || 'Failed to process audio');
+        }
 
-  getCurrentProblem: async (sessionId) => {
-    const response = await fetch(`${API_BASE_URL}/api/interview/current-problem?sessionId=${sessionId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Get current problem failed: ${response.status}`);
+        return await response.json();
     }
-    
-    return response.json();
-  },
 
-  submitCode: async (sessionId, code, language = 'javascript') => {
-    const response = await fetch(`${API_BASE_URL}/api/interview/submit-code`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        sessionId,
-        code,
-        language
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Submit code failed: ${response.status}`);
+    // Start interview
+    async startInterview(sessionId) {
+        return this.makeRequest('/api/interview/start-interview', {
+            method: 'POST',
+            body: JSON.stringify({ sessionId })
+        });
     }
-    
-    return response.json();
-  },
 
-  terminateSession: async (sessionId) => {
-    console.log('🗑️ Terminating session:', sessionId);
-    
-    const response = await fetch(`${API_BASE_URL}/api/interview/terminate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        sessionId
-      })
-    });
-    
-    if (!response.ok) {
-      console.error('❌ terminateSession API failed:', response.status, response.statusText);
-      throw new Error(`Terminate session failed: ${response.status}`);
+    // Get next question
+    async getNextQuestion(sessionId, transcript, toneMatrix, round) {
+        return this.makeRequest('/api/interview/next-question', {
+            method: 'POST',
+            body: JSON.stringify({
+                sessionId,
+                transcript,
+                toneMatrix,
+                round
+            })
+        });
     }
-    
-    const data = await response.json();
-    console.log('✅ Session terminated successfully:', data);
-    
-    return data;
-  }
-}; 
+
+    // Submit answer
+    async submitAnswer(answerData) {
+        return this.makeRequest('/api/interview/submit-answer', {
+            method: 'POST',
+            body: JSON.stringify(answerData)
+        });
+    }
+
+    // Submit code
+    async submitCode(sessionId, code, language = 'java') {
+        return this.makeRequest('/api/interview/submit-code', {
+            method: 'POST',
+            body: JSON.stringify({
+                sessionId,
+                code,
+                language
+            })
+        });
+    }
+
+    // Evaluate code
+    async evaluateCode(codeData) {
+        return this.makeRequest('/api/interview/evaluate-code', {
+            method: 'POST',
+            body: JSON.stringify(codeData)
+        });
+    }
+
+    // End interview
+    async endInterview(interviewId) {
+        return this.makeRequest('/api/interview/end-interview', {
+            method: 'POST',
+            body: JSON.stringify({ interviewId })
+        });
+    }
+
+    // Get final feedback
+    async getSummary(sessionId) {
+        return this.makeRequest('/api/interview/get-final-feedback', {
+            method: 'POST',
+            body: JSON.stringify({ sessionId })
+        });
+    }
+
+    // Terminate session
+    async terminateSession(sessionId) {
+        return this.makeRequest('/api/interview/terminate-session', {
+            method: 'POST',
+            body: JSON.stringify({ sessionId })
+        });
+    }
+
+    // Get DSA problems
+    async getDSAProblems(sessionId) {
+        return this.makeRequest(`/api/interview/dsa-problems?sessionId=${sessionId}`);
+    }
+
+    // Get current problem
+    async getCurrentProblem(sessionId) {
+        return this.makeRequest(`/api/interview/current-problem?sessionId=${sessionId}`);
+    }
+
+    // Get interview history
+    async getInterviewHistory() {
+        return this.makeRequest('/api/interview/history');
+    }
+
+    // Get specific interview
+    async getInterview(interviewId) {
+        return this.makeRequest(`/api/interview/${interviewId}`);
+    }
+
+    // Create new interview
+    async createInterview(interviewData) {
+        return this.makeRequest('/api/interview/create', {
+            method: 'POST',
+            body: JSON.stringify(interviewData)
+        });
+    }
+
+    // Update interview status
+    async updateInterviewStatus(interviewId, status) {
+        return this.makeRequest(`/api/interview/${interviewId}/status`, {
+            method: 'PUT',
+            body: JSON.stringify({ status })
+        });
+    }
+
+    // Add question to interview
+    async addQuestion(interviewId, questionData) {
+        return this.makeRequest(`/api/interview/${interviewId}/questions`, {
+            method: 'POST',
+            body: JSON.stringify(questionData)
+        });
+    }
+}
+
+// Export both as default and named export for compatibility
+const interviewService = new InterviewService();
+export { interviewService };
+export default interviewService; 

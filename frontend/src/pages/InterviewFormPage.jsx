@@ -45,13 +45,38 @@ const InterviewFormPage = () => {
     }
 
     setIsLoading(true);
+    
     try {
-      const formData = new FormData();
-      formData.append('resume', selectedFile);
-      formData.append('companyInfo', JSON.stringify(companyInfo));
-      formData.append('interviewType', interviewType);
+      // Convert file to base64
+      const base64File = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = reader.result.split(',')[1]; // Remove data:application/pdf;base64, prefix
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(selectedFile);
+      });
 
-      const uploadResponse = await interviewService.uploadResume(formData);
+      // Prepare request data
+      const requestData = {
+        resume: {
+          filename: selectedFile.name,
+          content: base64File,
+          type: selectedFile.type
+        },
+        companyInfo: companyInfo,
+        interviewType: interviewType
+      };
+
+      console.log('Sending request data:', {
+        filename: selectedFile.name,
+        fileSize: selectedFile.size,
+        companyInfo: companyInfo,
+        interviewType: interviewType
+      });
+
+      const uploadResponse = await interviewService.uploadResume(requestData);
       
       if (window.toast) {
         window.toast.success('Interview setup completed! Starting interview...');
@@ -70,7 +95,7 @@ const InterviewFormPage = () => {
     } catch (error) {
       console.error('Error starting interview:', error);
       if (window.toast) {
-        window.toast.error(error.response?.data?.error || 'Failed to start interview');
+        window.toast.error(error.message || 'Failed to start interview');
       }
     } finally {
       setIsLoading(false);
