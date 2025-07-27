@@ -13,7 +13,7 @@ class DSAProblemService {
 
     loadProblems() {
         try {
-            const problemsPath = path.join(__dirname, '../data/detailed_problems_with_html.json');
+            const problemsPath = path.join(__dirname, '../data/filtered_output.json');
             const problemsData = fs.readFileSync(problemsPath, 'utf8');
             return JSON.parse(problemsData);
         } catch (error) {
