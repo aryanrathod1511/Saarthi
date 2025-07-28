@@ -23,7 +23,7 @@ const InterviewSessionPage = () => {
     isProcessing,
     displayedQuestion,
     isQuestionFullyDisplayed,
-    showDSAProblem,
+  
     showSummary,
     summaryData,
     currentProblem,
@@ -216,7 +216,7 @@ const InterviewSessionPage = () => {
           isProcessing={isProcessing}
           displayedQuestion={displayedQuestion}
           isQuestionFullyDisplayed={isQuestionFullyDisplayed}
-          showDSAProblem={showDSAProblem}
+  
           showSummary={showSummary}
           summaryData={summaryData}
           currentProblem={currentProblem}

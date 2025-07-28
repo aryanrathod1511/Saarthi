@@ -29,7 +29,7 @@ const UnifiedInterviewPage = () => {
     isMuted,
     displayedQuestion,
     isQuestionFullyDisplayed,
-    showDSAProblem,
+  
     showSummary,
     summaryData,
     currentProblem,
@@ -222,7 +222,7 @@ const UnifiedInterviewPage = () => {
             isProcessing={isProcessing}
             displayedQuestion={displayedQuestion}
             isQuestionFullyDisplayed={isQuestionFullyDisplayed}
-            showDSAProblem={showDSAProblem}
+    
             showSummary={showSummary}
             summaryData={summaryData}
             currentProblem={currentProblem}

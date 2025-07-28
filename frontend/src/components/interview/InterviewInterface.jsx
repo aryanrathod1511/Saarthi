@@ -11,7 +11,7 @@ const InterviewInterface = ({
   isProcessing,
   displayedQuestion,
   isQuestionFullyDisplayed,
-  showDSAProblem,
+
   showSummary,
   summaryData,
   currentProblem,

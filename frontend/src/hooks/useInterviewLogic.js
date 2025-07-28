@@ -25,7 +25,7 @@ export const useInterviewLogic = (isOngoing = false, sessionIdFromProps = null) 
   const [isMuted, setIsMuted] = useState(false);
   const [displayedQuestion, setDisplayedQuestion] = useState('');
   const [isQuestionFullyDisplayed, setIsQuestionFullyDisplayed] = useState(false);
-  const [showDSAProblem, setShowDSAProblem] = useState(false);
+
   const [showSummary, setShowSummary] = useState(false);
   const [summaryData, setSummaryData] = useState(null);
 
@@ -159,9 +159,7 @@ export const useInterviewLogic = (isOngoing = false, sessionIdFromProps = null) 
           addQuestion(nextQuestionResponse.question, 'Next Question');
           setCurrentRound(nextQuestionResponse.round || questions.length + 1);
           
-          if (nextQuestionResponse.showDSAProblem !== undefined) {
-            setShowDSAProblem(nextQuestionResponse.showDSAProblem);
-          }
+
           
           if (nextQuestionResponse.shouldMoveToNextProblem) {
             setCurrentProblemIndex(prev => prev + 1);
@@ -191,7 +189,7 @@ export const useInterviewLogic = (isOngoing = false, sessionIdFromProps = null) 
       setDisplayedQuestion('');
       setQuestions([]);
       setCurrentRound(0);
-      setShowDSAProblem(false);
+      
       resetRecording();
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
@@ -318,7 +316,7 @@ export const useInterviewLogic = (isOngoing = false, sessionIdFromProps = null) 
     isProcessing,
     displayedQuestion,
     isQuestionFullyDisplayed,
-    showDSAProblem,
+
     showSummary,
     summaryData,
     currentProblem,
