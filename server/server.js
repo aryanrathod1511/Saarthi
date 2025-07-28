@@ -8,7 +8,6 @@ import mongoose from "mongoose";
 import { passport } from "./config/auth.js";
 import { router as interviewRoutes } from "./routes/interview.js";
 import { router as authRoutes } from "./routes/auth.js";
-console.log("Auth routes: ", authRoutes);
 
 // Load environment variables
 dotenv.config();

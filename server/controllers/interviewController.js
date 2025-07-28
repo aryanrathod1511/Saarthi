@@ -234,14 +234,28 @@ export const nextQuestion = async (req, res) => {
             }
         }
 
-        res.status(200).json({
+        // Prepare response object
+        const response = {
             question: nextQuestionResponse.question,
-            phase: nextQuestionResponse.phase,
             shouldMoveToNextProblem: nextQuestionResponse.shouldMoveToNextProblem,
             showDSAProblem: nextQuestionResponse.showDSAProblem,
             isWrapUp: nextQuestionResponse.isWrapUp,
             round: promptEngineer.interviewContext.questionHistory.length
-        });
+        };
+
+        // If showDSAProblem is true, include the current DSA problem
+        if (nextQuestionResponse.showDSAProblem && promptEngineer.interviewContext.interviewType.toLowerCase() === 'dsa') {
+            const dsaProblems = promptEngineer.interviewContext.dsaProblems;
+            const currentIndex = promptEngineer.interviewContext.currentProblemIndex || 0;
+            
+            if (dsaProblems && currentIndex < dsaProblems.length) {
+                response.currentProblem = dsaProblems[currentIndex];
+                response.currentProblemIndex = currentIndex;
+                response.totalProblems = dsaProblems.length;
+            }
+        }
+
+        res.status(200).json(response);
 
     } catch (error) {
         console.error('Error in nextQuestion:', error);
@@ -308,7 +322,8 @@ export const startInterview = async (req, res) => {
 
         const config = interviewFlowService.getInterviewConfig(promptEngineer.interviewContext.interviewType);
 
-        res.status(200).json({
+        // Prepare response object
+        const response = {
             question: welcomeResponse.question,
             questionCategory: 'Introduction',
             round: 1,
@@ -318,7 +333,15 @@ export const startInterview = async (req, res) => {
             maxDuration: config.maxDuration,
             showDSAProblem: false,
             wrapUpThreshold: config.wrapUpThreshold
-        });
+        };
+
+        // For DSA interviews, include all problems in the response
+        if (promptEngineer.interviewContext.interviewType.toLowerCase() === 'dsa') {
+            response.dsaProblems = promptEngineer.interviewContext.dsaProblems;
+            response.totalProblems = promptEngineer.interviewContext.dsaProblems.length;
+        }
+
+        res.status(200).json(response);
 
     } catch (err) {
         console.error('Error in startInterview:', err);

@@ -29,7 +29,10 @@ const systemPrompt = `You are an expert AI interviewer. Your ONLY job is to ask 
 You MUST respond with ONLY a JSON object like this:
 {
   "question": "Your direct question to ask the candidate",
-  "feedback": "Your internal evaluation of their previous response"
+  "feedback": "Your internal evaluation of their previous response",
+  "shouldMoveToNextProblem": false,
+  "showDSAProblem": false,
+  "isWrapUp": false
 }
 
 **STRICT RULES:**
@@ -47,6 +50,28 @@ You MUST respond with ONLY a JSON object like this:
    - Include confidence/stress analysis
    - Be critical when needed for improvement
 
+3. **shouldMoveToNextProblem field**: Set to true ONLY when:
+   - You have thoroughly discussed the current problem
+   - The candidate has shown sufficient depth of understanding
+   - You are ready to move to the next problem
+   - It's NOT during the introduction phase (first 2 rounds)
+   - The candidate has demonstrated enough knowledge to proceed
+
+4. **showDSAProblem field**: Set to true ONLY when:
+   - You are introducing the FIRST DSA/coding problem
+   - The problem should be displayed on the screen
+   - Set to false for all other questions
+
+5. **isWrapUp field**: Set to true only when wrapping up the interview
+
+**QUALITY INTERVIEW GUIDELINES:**
+- Ask follow-up questions to dig deeper into responses
+- Ensure sufficient depth before moving to next problem
+- Only set shouldMoveToNextProblem: true after thorough discussion
+- Make questions conversational and natural
+- Acknowledge previous responses before asking new questions
+- Adapt difficulty based on candidate performance
+
 **ABSOLUTELY NO:**
 - Thinking text like "Let me think about this..."
 - Explanations of your process
@@ -55,9 +80,10 @@ You MUST respond with ONLY a JSON object like this:
 - Any text outside the JSON object
 
 **ONLY:**
-- The JSON object with question and feedback fields
+- The JSON object with all required fields
 - Clean, professional questions
 - Honest internal feedback
+- Proper flag management
 
 **Remember**: The question is what the candidate sees. Make it perfect.`;
 
@@ -75,7 +101,15 @@ export const ask = async(prompt, companyInfo = null) => {
 
 ${prompt}
 
-**REMEMBER**: Respond with ONLY JSON containing question and feedback fields. NO thinking text, NO explanations.`;
+**QUALITY INTERVIEW REQUIREMENTS:**
+- Ask follow-up questions to dig deeper into responses
+- Ensure sufficient depth before moving to next problem
+- Only set shouldMoveToNextProblem: true after thorough discussion
+- Make questions conversational and natural
+- Acknowledge previous responses before asking new questions
+- Adapt difficulty based on candidate performance
+
+**REMEMBER**: Respond with ONLY JSON containing all required fields. NO thinking text, NO explanations.`;
     }
 
     const body = {
@@ -116,8 +150,8 @@ ${prompt}
 
             const result = response.data.candidates[0].content.parts[0].text;
 
-            // Simple JSON parsing
-            let question, feedback;
+            // Enhanced JSON parsing with all required fields
+            let question, feedback, shouldMoveToNextProblem, showDSAProblem, isWrapUp;
             
             try {
                 const jsonMatch = result.match(/\{[\s\S]*\}/);
@@ -125,6 +159,9 @@ ${prompt}
                     const jsonResponse = JSON.parse(jsonMatch[0]);
                     question = jsonResponse.question;
                     feedback = jsonResponse.feedback;
+                    shouldMoveToNextProblem = jsonResponse.shouldMoveToNextProblem;
+                    showDSAProblem = jsonResponse.showDSAProblem;
+                    isWrapUp = jsonResponse.isWrapUp;
                 }
             } catch (jsonError) {
                 console.log('JSON parsing failed, using fallback');
@@ -138,7 +175,10 @@ ${prompt}
 
             return {
                 question: question ? question.trim() : "Please provide your response to continue the interview.",
-                feedback: feedback ? feedback.trim() : "No specific feedback for this round."
+                feedback: feedback ? feedback.trim() : "No specific feedback for this round.",
+                shouldMoveToNextProblem: shouldMoveToNextProblem || false,
+                showDSAProblem: showDSAProblem || false,
+                isWrapUp: isWrapUp || false
             };
         } catch (error) {
             console.error(`Model ${i + 1} failed:`, error.message);

@@ -17,7 +17,6 @@ export class PromptEngineer {
             candidateResponses: [],
             toneAnalysis: [],
             interviewType: 'Technical',
-            currentPhase: 'introduction',
             duration: duration * 60 * 1000,
             experienceLevel: experienceLevel
         };
@@ -25,7 +24,6 @@ export class PromptEngineer {
 
     setInterviewType(interviewType) {
         this.interviewContext.interviewType = interviewType;
-        this.interviewContext.currentPhase = 'introduction';
     }
 
     setDuration(duration) {
@@ -111,8 +109,7 @@ You are an expert technical interviewer for ${this.companyInfo.name} (Choose an 
 
 **INTERVIEW CONTEXT:**
 - **Type**: ${this.interviewContext.interviewType}
-- **Experience Level**: ${this.interviewContext.experienceLevel}
-- **Current Phase**: ${this.interviewContext.currentPhase}`;
+- **Experience Level**: ${this.interviewContext.experienceLevel}`;
     }
 
     getResumeContext() {

@@ -54,9 +54,7 @@ const userSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Index for better query performance
-userSchema.index({ email: 1 });
-userSchema.index({ googleId: 1 });
+// Note: Indexes are automatically created by unique: true in schema definition
 
 // Virtual for user's full profile
 userSchema.virtual('profile').get(function() {

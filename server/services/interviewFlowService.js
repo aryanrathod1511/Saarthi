@@ -7,23 +7,19 @@ class InterviewFlowService {
             'dsa': {
                 maxDuration: 50,
                 wrapUpThreshold: 45,
-                problemsCount: 4,
-                phases: ['introduction', 'problem_solving', 'wrap_up']
+                problemsCount: 4
             },
             'resume_cs_fundamentals': {
                 maxDuration: 30,
-                wrapUpThreshold: 28,
-                phases: ['introduction', 'resume_discussion', 'technical_fundamentals', 'wrap_up']
+                wrapUpThreshold: 28
             },
             'technical_behavioral': {
                 maxDuration: 20,
-                wrapUpThreshold: 18,
-                phases: ['introduction', 'technical_assessment', 'behavioral_assessment', 'wrap_up']
+                wrapUpThreshold: 18
             },
             'behavioral': {
                 maxDuration: 20,
-                wrapUpThreshold: 18,
-                phases: ['introduction', 'behavioral_assessment', 'cultural_fit', 'wrap_up']
+                wrapUpThreshold: 18
             }
         };
     }
@@ -83,7 +79,7 @@ ${interviewType === 'dsa' ? `
 
 
     async generateNextQuestion(promptEngineer, context = {}) {
-        const { interviewType, currentPhase, experienceLevel } = promptEngineer.interviewContext;
+        const { interviewType, experienceLevel } = promptEngineer.interviewContext;
         const { name, type, role } = promptEngineer.companyInfo;
         const { transcript, toneMetrics, elapsedMinutes, currentProblem, dsaProblemContext } = context;
         const candidateName = promptEngineer.resumeData?.name || 'the candidate';
@@ -100,7 +96,6 @@ ${interviewType === 'dsa' ? `
 - Company: ${name} (${type})
 - Role: ${role} (${experienceLevel} level)
 - Interview Type: ${interviewType}
-- Current Phase: ${currentPhase}
 - Elapsed Time: ${elapsedMinutes} minutes
 - Remaining Time: ${config.maxDuration - elapsedMinutes} minutes
 - Candidate: ${candidateName}
@@ -126,32 +121,49 @@ ${interviewType === 'behavioral' ? this.getHRInstructions(promptEngineer, config
 **RESPONSE FORMAT - JSON ONLY:**
 {
   "question": "Your natural, conversational question",
-  "phase": "${currentPhase}",
+  "feedback": "Your internal evaluation of their response",
   "shouldMoveToNextProblem": false,
   "showDSAProblem": false,
   "isWrapUp": false
 }
 
-**CRITICAL:**
+**CRITICAL FLAG MANAGEMENT:**
+- **shouldMoveToNextProblem**: Set to true ONLY when:
+  * You have thoroughly discussed the current problem (at least 3-4 follow-up questions)
+  * The candidate has shown sufficient depth of understanding
+  * You are ready to move to the next problem
+  * It's NOT during the introduction phase (first 2 rounds)
+  * The candidate has demonstrated enough knowledge to proceed
+  * You have asked enough follow-up questions to assess their understanding
+
+- **showDSAProblem**: Set to true ONLY when:
+  * You are introducing the FIRST DSA/coding problem
+  * The problem should be displayed on the screen
+  * Set to false for all other questions
+
+**QUALITY INTERVIEW GUIDELINES:**
+- Ask follow-up questions to dig deeper into responses
+- Ensure sufficient depth before moving to next problem
+- Only set shouldMoveToNextProblem: true after thorough discussion
 - Make questions conversational and natural
-- Acknowledge their previous response
-- Adapt difficulty based on their performance
-- Keep track of time and phase progression
-- **IMPORTANT:** Set "showDSAProblem": false during introduction phase
-- **IMPORTANT:** Set "showDSAProblem": true ONLY when introducing the first DSA/coding problem for resume_cs_fundamentals and technical_behavioral interviews and DSA interviews
-- **CRITICAL:** NEVER set "shouldMoveToNextProblem": true during introduction phase (first 2 rounds)
-- **CRITICAL:** Only set "shouldMoveToNextProblem": true when thoroughly discussing the current problem and ready to move to the next one`;
+- Acknowledge previous responses before asking new questions
+- Adapt difficulty based on candidate performance
+- **Only set "shouldMoveToNextProblem": true when thoroughly discussing the current problem and ready to move to the next one**`;
 
         const aiResponse = await ask(nextQuestionPrompt, promptEngineer.companyInfo);
         
-        // Fix: Handle the object response from ask() function
+        // Handle the enhanced response format from ask() function
         if (aiResponse && typeof aiResponse === 'object' && aiResponse.question) {
-            console.log("AI Response : ", aiResponse.showDSAProblem);
+            console.log("AI Response received with flags:", {
+                shouldMoveToNextProblem: aiResponse.shouldMoveToNextProblem,
+                showDSAProblem: aiResponse.showDSAProblem,
+                isWrapUp: aiResponse.isWrapUp
+            });
+            
             return {
                 question: aiResponse.question,
-                phase: aiResponse.phase || currentPhase,
                 shouldMoveToNextProblem: aiResponse.shouldMoveToNextProblem || false,
-                showDSAProblem: aiResponse.showDSAProblem || true,
+                showDSAProblem: aiResponse.showDSAProblem || false,
                 isWrapUp: aiResponse.isWrapUp || false
             };
         }
@@ -162,7 +174,6 @@ ${interviewType === 'behavioral' ? this.getHRInstructions(promptEngineer, config
    
     getDSAInstructions(promptEngineer, config) {
         const currentRound = promptEngineer.interviewContext.questionHistory?.length || 0;
-        const isIntroductionPhase = currentRound <= 2; // First 2 rounds are introduction
         const currentProblem = promptEngineer.interviewContext.currentProblem;
         
         if (!currentProblem) {
@@ -174,11 +185,10 @@ ${interviewType === 'behavioral' ? this.getHRInstructions(promptEngineer, config
 - Ask if they understand the problem requirements
 - Give them time to think and approach the solution
 - Ask follow-up questions about their approach
-- **CRITICAL:** Only set "shouldMoveToNextProblem": true when they've discussed their approach thoroughly AND it's NOT the introduction phase
-- **CRITICAL:** During introduction phase (first 2 rounds), NEVER set "shouldMoveToNextProblem": true
+- **CRITICAL:** Only set "shouldMoveToNextProblem": true when they've discussed their approach thoroughly
 - Time management: ${config.maxDuration} minutes total for ${config.problemsCount} problems
 - Current time: ${config.maxDuration} minutes remaining
-- Current Round: ${currentRound} (Introduction: ${isIntroductionPhase ? 'Yes' : 'No'})`;
+- Current Round: ${currentRound}`;
         }
 
         return `
@@ -188,12 +198,16 @@ ${interviewType === 'behavioral' ? this.getHRInstructions(promptEngineer, config
 - Discuss their approach, time complexity, space complexity
 - Ask about edge cases and optimizations
 - Ask follow-up questions about their solution
-- **CRITICAL:** Only set "shouldMoveToNextProblem": true when it is the last question from your side for the current problem AND it's NOT the introduction phase
-- **CRITICAL:** During introduction phase (first 2 rounds), NEVER set "shouldMoveToNextProblem": true
+- **CRITICAL:** Only set "shouldMoveToNextProblem": true when:
+  * You have asked at least 3-4 follow-up questions about the current problem
+  * The candidate has shown sufficient depth of understanding
+  * You are ready to move to the next problem
+  * The candidate has demonstrated enough knowledge to proceed
 - **CRITICAL:** Only move to next problem after thorough discussion of current problem
+- **QUALITY CHECK:** Ensure you've asked enough follow-up questions to assess their understanding before moving on
 - Time management: ${config.maxDuration} minutes total for ${config.problemsCount} problems
 - Current time: ${config.maxDuration} minutes remaining
-- Current Round: ${currentRound} (Introduction: ${isIntroductionPhase ? 'Yes' : 'No'})`;
+- Current Round: ${currentRound}`;
     }
 
     getResumeCSInstructions(promptEngineer, config) {
@@ -311,7 +325,10 @@ You are wrapping up the interview at ${name}. The interview has been running for
         if (response && typeof response === 'object' && response.question) {
             return {
                 question: response.question,
-                feedback: response.feedback || ''
+                feedback: response.feedback || '',
+                shouldMoveToNextProblem: response.shouldMoveToNextProblem || false,
+                showDSAProblem: response.showDSAProblem || false,
+                isWrapUp: response.isWrapUp || false
             };
         }
 
@@ -328,12 +345,18 @@ You are wrapping up the interview at ${name}. The interview has been running for
             
             return {
                 question: cleanedQuestion || 'Could you please elaborate on that?',
-                feedback: ''
+                feedback: '',
+                shouldMoveToNextProblem: false,
+                showDSAProblem: false,
+                isWrapUp: false
             };
         }
         return {
             question: 'Could you please elaborate on that?',
-            feedback: ''
+            feedback: '',
+            shouldMoveToNextProblem: false,
+            showDSAProblem: false,
+            isWrapUp: false
         };
     }
 
