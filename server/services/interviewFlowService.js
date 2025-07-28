@@ -85,70 +85,65 @@ ${interviewType === 'dsa' ? `
         const candidateName = promptEngineer.resumeData?.name || 'the candidate';
         const config = this.getInterviewConfig(interviewType);
 
-        
         if (this.shouldWrapUp(interviewType, elapsedMinutes)) {
             return await this.generateWrapUpQuestion(promptEngineer, context);
         }
 
-        let nextQuestionPrompt = promptEngineer.getSystemPrompt() + `**GENERATE NEXT INTERVIEW QUESTION**
+        // Build conversation history
+        const conversationHistory = this.buildConversationHistory(promptEngineer);
+        
+        let nextQuestionPrompt = promptEngineer.getSystemPrompt() + `**DSA INTERVIEW - NEXT QUESTION**
 
-**INTERVIEW CONTEXT:**
-- Company: ${name} (${type})
-- Role: ${role} (${experienceLevel} level)
-- Interview Type: ${interviewType}
-- Elapsed Time: ${elapsedMinutes} minutes
-- Remaining Time: ${config.maxDuration - elapsedMinutes} minutes
+**CONTEXT:**
+- Company: ${name} | Role: ${role} | Type: ${interviewType}
+- Time: ${elapsedMinutes}/${config.maxDuration} minutes
 - Candidate: ${candidateName}
+- Current Problem: ${currentProblem ? `${currentProblem.title} (${promptEngineer.interviewContext.currentProblemIndex + 1}/${config.problemsCount})` : 'Introduction'}
 
-**CURRENT QUESTION CONTEXT:**
-- Last Question Asked: "${promptEngineer.interviewContext.questionHistory[promptEngineer.interviewContext.questionHistory?.length - 1] || 'First question'}"
-- Candidate's Response: "${transcript || 'No response yet'}"
-- Tone Analysis: ${this.formatToneAnalysis(toneMetrics)}
+**CONVERSATION HISTORY (ANALYZE CAREFULLY):**
+${conversationHistory}
 
-${dsaProblemContext ? `
-**DSA PROBLEM CONTEXT:**
-- ${dsaProblemContext}` : ''}
+**CURRENT RESPONSE:**
+"${transcript || 'No response yet'}"
 
-**IMPORTANT:** The candidate is responding to the question above. Your next question should be a natural follow-up or continuation based on their response.
+**YOUR TASK:**
+1. **Analyze the conversation history** - understand what phases have been completed
+2. **Determine the next phase** based on the 9-phase structure
+3. **Ask ONE focused question** that moves the interview forward
+4. **Set shouldMoveToNextProblem: true** if ready to move to next problem
 
-**INTERVIEW TYPE SPECIFIC INSTRUCTIONS:**
+**9-PHASE STRUCTURE:**
+1. **Approach Discussion** - discuss solution approach
+2. **Clarifying Questions** - answer candidate questions
+3. **Edge Cases** - discuss edge cases
+4. **Time Complexity** - discuss O(n) analysis
+5. **Space Complexity** - discuss memory usage
+6. **Constraints Check** - compare with problem constraints
+7. **Implementation Request** - ask for code
+8. **Code Evaluation** - evaluate submitted code
+9. **Move to Next** - set flag and move on
 
-${interviewType === 'dsa' ? this.getDSAInstructions(promptEngineer, config) : ''}
-${interviewType === 'resume_cs_fundamentals' ? this.getResumeCSInstructions(promptEngineer, config) : ''}
-${interviewType === 'technical_behavioral' ? this.getTechnicalHRInstructions(promptEngineer, config) : ''}
-${interviewType === 'behavioral' ? this.getHRInstructions(promptEngineer, config) : ''}
+**SMART PHASE DETECTION:**
+- If candidate mentioned implementation/code → Phase 7-8 complete
+- If discussed complexity → Phase 4-5 complete  
+- If discussed edge cases → Phase 3 complete
+- If asked about approach → Phase 1 complete
+- **Don't repeat completed phases**
 
-**RESPONSE FORMAT - JSON ONLY:**
+**RESPONSE FORMAT:**
 {
-  "question": "Your natural, conversational question",
-  "feedback": "Your internal evaluation of their response",
+  "question": "Your next question",
+  "feedback": "Analysis of their response",
   "shouldMoveToNextProblem": false,
-  "showDSAProblem": false,
   "isWrapUp": false
 }
 
-**CRITICAL FLAG MANAGEMENT:**
-- **shouldMoveToNextProblem**: Set to true ONLY when:
-  * You have thoroughly discussed the current problem (at least 3-4 follow-up questions)
-  * The candidate has shown sufficient depth of understanding
-  * You are ready to move to the next problem
-  * It's NOT during the introduction phase (first 2 rounds)
-  * The candidate has demonstrated enough knowledge to proceed
-  * You have asked enough follow-up questions to assess their understanding
-
-- **showDSAProblem**: Set to true ONLY when:
-  * You are introducing the FIRST DSA/coding problem
-  * The problem should be displayed on the screen
-  * Set to false for all other questions
-
-**QUALITY INTERVIEW GUIDELINES:**
-- Ask follow-up questions to dig deeper into responses
-- Ensure sufficient depth before moving to next problem
-- Only set shouldMoveToNextProblem: true after thorough discussion
-- Make questions conversational and natural
-- Acknowledge previous responses before asking new questions
-- Adapt difficulty based on candidate performance
-- **Only set "shouldMoveToNextProblem": true when thoroughly discussing the current problem and ready to move to the next one**`;
+**FLAG RULES:**
+- Set shouldMoveToNextProblem: true when:
+  * All phases for current problem are complete
+  * OR discussed same problem for 3+ questions
+  * OR candidate explained implementation
+  * **BE AGGRESSIVE - don't loop**`;
 
         const aiResponse = await ask(nextQuestionPrompt, promptEngineer.companyInfo);
         
@@ -156,14 +151,12 @@ ${interviewType === 'behavioral' ? this.getHRInstructions(promptEngineer, config
         if (aiResponse && typeof aiResponse === 'object' && aiResponse.question) {
             console.log("AI Response received with flags:", {
                 shouldMoveToNextProblem: aiResponse.shouldMoveToNextProblem,
-                showDSAProblem: aiResponse.showDSAProblem,
                 isWrapUp: aiResponse.isWrapUp
             });
             
             return {
                 question: aiResponse.question,
                 shouldMoveToNextProblem: aiResponse.shouldMoveToNextProblem || false,
-                showDSAProblem: aiResponse.showDSAProblem || false,
                 isWrapUp: aiResponse.isWrapUp || false
             };
         }
@@ -175,39 +168,25 @@ ${interviewType === 'behavioral' ? this.getHRInstructions(promptEngineer, config
     getDSAInstructions(promptEngineer, config) {
         const currentRound = promptEngineer.interviewContext.questionHistory?.length || 0;
         const currentProblem = promptEngineer.interviewContext.currentProblem;
+        const currentProblemIndex = promptEngineer.interviewContext.currentProblemIndex || 0;
         
-        if (!currentProblem) {
+        // Introduction phase (first 2 rounds)
+        if (!currentProblem || currentRound <= 2) {
             return `
-**DSA INTERVIEW - PROBLEM PRESENTATION:**
-- The DSA problem is now displayed on the right side of the screen
-- Mention: "I've displayed the problem on your screen. Please take a look at it."
-- Present the current problem: "Loading problem..."
-- Ask if they understand the problem requirements
-- Give them time to think and approach the solution
-- Ask follow-up questions about their approach
-- **CRITICAL:** Only set "shouldMoveToNextProblem": true when they've discussed their approach thoroughly
-- Time management: ${config.maxDuration} minutes total for ${config.problemsCount} problems
-- Current time: ${config.maxDuration} minutes remaining
-- Current Round: ${currentRound}`;
+**INTRODUCTION PHASE:**
+- Welcome candidate and set expectations
+- Mention ${config.problemsCount} coding problems will be displayed on screen
+- Ask for brief introduction and background
+- **Don't set shouldMoveToNextProblem during introduction**`;
         }
 
         return `
-**DSA INTERVIEW - PROBLEM DISCUSSION:**
-- Current Problem: "${currentProblem.title}" (displayed on screen)
-- The problem statement, sample test cases, and code editor are visible on the right side
-- Discuss their approach, time complexity, space complexity
-- Ask about edge cases and optimizations
-- Ask follow-up questions about their solution
-- **CRITICAL:** Only set "shouldMoveToNextProblem": true when:
-  * You have asked at least 3-4 follow-up questions about the current problem
-  * The candidate has shown sufficient depth of understanding
-  * You are ready to move to the next problem
-  * The candidate has demonstrated enough knowledge to proceed
-- **CRITICAL:** Only move to next problem after thorough discussion of current problem
-- **QUALITY CHECK:** Ensure you've asked enough follow-up questions to assess their understanding before moving on
-- Time management: ${config.maxDuration} minutes total for ${config.problemsCount} problems
-- Current time: ${config.maxDuration} minutes remaining
-- Current Round: ${currentRound}`;
+**PROBLEM DISCUSSION PHASE:**
+- Current: "${currentProblem.title}" (${currentProblemIndex + 1}/${config.problemsCount})
+- Problem is already displayed on screen
+- Follow 9-phase structure from main prompt
+- **Don't repeat completed phases**
+- **Move to next problem when ready**`;
     }
 
     getResumeCSInstructions(promptEngineer, config) {
@@ -226,8 +205,6 @@ ${interviewType === 'behavioral' ? this.getHRInstructions(promptEngineer, config
 
 **DSA PROBLEM INTEGRATION:**
 - After 3-4 questions, introduce a DSA problem: "Now let's work on a coding problem together."
-- **IMPORTANT:** When introducing the FIRST DSA problem, set "showDSAProblem": true in your response
-- **IMPORTANT:** Before introducing DSA, keep "showDSAProblem": false
 - Choose an appropriate problem based on their experience level
 - The problem will be displayed on the right side with a code editor
 - Guide them through the problem-solving process
@@ -236,8 +213,7 @@ ${interviewType === 'behavioral' ? this.getHRInstructions(promptEngineer, config
 ${resumeText}
 
 **Current Round:** ${currentRound}
-**DSA Introduction Timing:** Introduce DSA problem around round 4-5
-**showDSAProblem Flag:** Set to true ONLY when introducing the first DSA problem after that set it to false`;
+**DSA Introduction Timing:** Introduce DSA problem around round 4-5`;
     }
 
     
@@ -256,8 +232,6 @@ ${resumeText}
 
 **CODING INTEGRATION:**
 - After 2-3 questions, introduce a coding problem: "Let's work on a small coding challenge."
-- **IMPORTANT:** When introducing the FIRST coding problem, set "showDSAProblem": true in your response
-- **IMPORTANT:** Before introducing coding, keep "showDSAProblem": false
 - Choose a simple problem appropriate for their level
 - The problem will be displayed on the right side with a code editor
 - Guide them through the solution
@@ -266,8 +240,7 @@ ${resumeText}
 ${resumeText}
 
 **Current Round:** ${currentRound}
-**Coding Introduction Timing:** Introduce coding around round 3-4
-**showDSAProblem Flag:** Set to true ONLY when introducing the first coding problem`;
+**Coding Introduction Timing:** Introduce coding around round 3-4`;
     }
 
     
@@ -327,7 +300,6 @@ You are wrapping up the interview at ${name}. The interview has been running for
                 question: response.question,
                 feedback: response.feedback || '',
                 shouldMoveToNextProblem: response.shouldMoveToNextProblem || false,
-                showDSAProblem: response.showDSAProblem || false,
                 isWrapUp: response.isWrapUp || false
             };
         }
@@ -347,7 +319,6 @@ You are wrapping up the interview at ${name}. The interview has been running for
                 question: cleanedQuestion || 'Could you please elaborate on that?',
                 feedback: '',
                 shouldMoveToNextProblem: false,
-                showDSAProblem: false,
                 isWrapUp: false
             };
         }
@@ -355,9 +326,31 @@ You are wrapping up the interview at ${name}. The interview has been running for
             question: 'Could you please elaborate on that?',
             feedback: '',
             shouldMoveToNextProblem: false,
-            showDSAProblem: false,
             isWrapUp: false
         };
+    }
+
+    buildConversationHistory(promptEngineer) {
+        const questions = promptEngineer.interviewContext.questionHistory || [];
+        const responses = promptEngineer.interviewContext.candidateResponses || [];
+        
+        if (questions.length === 0) {
+            return 'No previous conversation';
+        }
+
+        let history = '';
+        const maxHistory = Math.min(questions.length, 5); // Last 5 exchanges
+        
+        for (let i = Math.max(0, questions.length - maxHistory); i < questions.length; i++) {
+            const question = questions[i];
+            const response = responses[i] || 'No response';
+            
+            history += `**Round ${i + 1}:**\n`;
+            history += `Q: ${question}\n`;
+            history += `A: ${response}\n\n`;
+        }
+        
+        return history;
     }
 
     formatToneAnalysis(toneMetrics) {

@@ -22,70 +22,36 @@ const GEMINI_MODELS = [
 let GEMINI_API_URL = GEMINI_MODELS[0]; // Start with the first model
 
 // Enhanced system prompt with strict JSON format requirement
-const systemPrompt = `You are an expert AI interviewer. Your ONLY job is to ask questions and evaluate responses.
+const systemPrompt = `You are an expert DSA interviewer. Analyze conversation history and ask focused questions.
 
-**CRITICAL RESPONSE FORMAT - YOU MUST FOLLOW THIS EXACTLY:**
-
-You MUST respond with ONLY a JSON object like this:
+**RESPONSE FORMAT:**
 {
-  "question": "Your direct question to ask the candidate",
-  "feedback": "Your internal evaluation of their previous response",
+  "question": "Your next question",
+  "feedback": "Analysis of their response", 
   "shouldMoveToNextProblem": false,
-  "showDSAProblem": false,
   "isWrapUp": false
 }
 
-**STRICT RULES:**
-1. **question field**: This will be displayed directly to the user
-   - Make it direct and clear
-   - Professional and complete
-   - NO thinking text, NO explanations
-   - Just the question you want to ask and any statement you want to make to the candidate
-   - Include any brief encouragement if needed
+**9-PHASE STRUCTURE:**
+1. Approach Discussion 2. Clarifying Questions 3. Edge Cases 4. Time Complexity 5. Space Complexity 6. Constraints Check 7. Implementation Request 8. Code Evaluation 9. Move to Next
 
-2. **feedback field**: This is for internal analysis only
-   - Honest and detailed evaluation
-   - Include technical assessment
-   - Include communication evaluation
-   - Include confidence/stress analysis
-   - Be critical when needed for improvement
+**SMART DETECTION:**
+- If candidate mentioned code/implementation → Phases 7-8 complete
+- If discussed complexity → Phases 4-5 complete
+- If discussed edge cases → Phase 3 complete
+- If asked about approach → Phase 1 complete
+- **Don't repeat completed phases**
 
-3. **shouldMoveToNextProblem field**: Set to true ONLY when:
-   - You have thoroughly discussed the current problem
-   - The candidate has shown sufficient depth of understanding
-   - You are ready to move to the next problem
-   - It's NOT during the introduction phase (first 2 rounds)
-   - The candidate has demonstrated enough knowledge to proceed
+**FLAG RULES:**
+- Set shouldMoveToNextProblem: true when:
+  * All phases for current problem are complete
+  * OR discussed same problem for 3+ questions  
+  * OR candidate explained implementation
+  * **BE AGGRESSIVE - don't loop**
 
-4. **showDSAProblem field**: Set to true ONLY when:
-   - You are introducing the FIRST DSA/coding problem
-   - The problem should be displayed on the screen
-   - Set to false for all other questions
+**DSA PROBLEMS ARE PRE-LOADED** - don't try to "show" problems
 
-5. **isWrapUp field**: Set to true only when wrapping up the interview
-
-**QUALITY INTERVIEW GUIDELINES:**
-- Ask follow-up questions to dig deeper into responses
-- Ensure sufficient depth before moving to next problem
-- Only set shouldMoveToNextProblem: true after thorough discussion
-- Make questions conversational and natural
-- Acknowledge previous responses before asking new questions
-- Adapt difficulty based on candidate performance
-
-**ABSOLUTELY NO:**
-- Thinking text like "Let me think about this..."
-- Explanations of your process
-- Verbose responses
-- Multiple questions
-- Any text outside the JSON object
-
-**ONLY:**
-- The JSON object with all required fields
-- Clean, professional questions
-- Honest internal feedback
-- Proper flag management
-
-**Remember**: The question is what the candidate sees. Make it perfect.`;
+**ONLY JSON RESPONSE - NO THINKING TEXT**`;
 
 export const ask = async(prompt, companyInfo = null) => {
     // Check if API key is available
@@ -102,12 +68,17 @@ export const ask = async(prompt, companyInfo = null) => {
 ${prompt}
 
 **QUALITY INTERVIEW REQUIREMENTS:**
+- Follow the structured 9-phase problem flow for DSA interviews
+- **DSA PROBLEMS ARE PRE-LOADED** - don't try to "show" or "introduce" problems
 - Ask follow-up questions to dig deeper into responses
 - Ensure sufficient depth before moving to next problem
-- Only set shouldMoveToNextProblem: true after thorough discussion
+- **SET shouldMoveToNextProblem: true IMMEDIATELY after completing the structured flow**
 - Make questions conversational and natural
 - Acknowledge previous responses before asking new questions
 - Adapt difficulty based on candidate performance
+- **EFFICIENCY:** Don't spend too long on a single problem - move through problems systematically
+- **STRUCTURED APPROACH:** Follow the defined phases: problem discussion → implementation → evaluation → next problem
+- **AGGRESSIVE MOVEMENT:** Don't hesitate - complete the flow and move on
 
 **REMEMBER**: Respond with ONLY JSON containing all required fields. NO thinking text, NO explanations.`;
     }
@@ -149,18 +120,19 @@ ${prompt}
             }
 
             const result = response.data.candidates[0].content.parts[0].text;
+            console.log("Result:", result);
 
             // Enhanced JSON parsing with all required fields
-            let question, feedback, shouldMoveToNextProblem, showDSAProblem, isWrapUp;
+            let question, feedback, shouldMoveToNextProblem, isWrapUp;
             
             try {
                 const jsonMatch = result.match(/\{[\s\S]*\}/);
                 if (jsonMatch) {
                     const jsonResponse = JSON.parse(jsonMatch[0]);
+                    console.log("JSON Response:", jsonResponse);
                     question = jsonResponse.question;
                     feedback = jsonResponse.feedback;
                     shouldMoveToNextProblem = jsonResponse.shouldMoveToNextProblem;
-                    showDSAProblem = jsonResponse.showDSAProblem;
                     isWrapUp = jsonResponse.isWrapUp;
                 }
             } catch (jsonError) {
@@ -177,7 +149,6 @@ ${prompt}
                 question: question ? question.trim() : "Please provide your response to continue the interview.",
                 feedback: feedback ? feedback.trim() : "No specific feedback for this round.",
                 shouldMoveToNextProblem: shouldMoveToNextProblem || false,
-                showDSAProblem: showDSAProblem || false,
                 isWrapUp: isWrapUp || false
             };
         } catch (error) {

@@ -238,13 +238,12 @@ export const nextQuestion = async (req, res) => {
         const response = {
             question: nextQuestionResponse.question,
             shouldMoveToNextProblem: nextQuestionResponse.shouldMoveToNextProblem,
-            showDSAProblem: nextQuestionResponse.showDSAProblem,
             isWrapUp: nextQuestionResponse.isWrapUp,
             round: promptEngineer.interviewContext.questionHistory.length
         };
 
-        // If showDSAProblem is true, include the current DSA problem
-        if (nextQuestionResponse.showDSAProblem && promptEngineer.interviewContext.interviewType.toLowerCase() === 'dsa') {
+        // For DSA interviews, always include current problem info
+        if (promptEngineer.interviewContext.interviewType.toLowerCase() === 'dsa') {
             const dsaProblems = promptEngineer.interviewContext.dsaProblems;
             const currentIndex = promptEngineer.interviewContext.currentProblemIndex || 0;
             
@@ -331,7 +330,7 @@ export const startInterview = async (req, res) => {
             interviewType: promptEngineer.interviewContext.interviewType,
             startTime: startTime,
             maxDuration: config.maxDuration,
-            showDSAProblem: false,
+
             wrapUpThreshold: config.wrapUpThreshold
         };
 
