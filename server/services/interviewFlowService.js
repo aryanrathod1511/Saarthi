@@ -92,6 +92,12 @@ ${interviewType === 'dsa' ? `
         // Build conversation history
         const conversationHistory = this.buildConversationHistory(promptEngineer);
         
+        // Check if problem changed
+        const problemChanged = context.problemChanged || false;
+        
+        // Check if flag was already set for current problem
+        const flagAlreadySet = promptEngineer.interviewContext.flagSetForCurrentProblem || false;
+        
         let nextQuestionPrompt = promptEngineer.getSystemPrompt() + `**DSA INTERVIEW - NEXT QUESTION**
 
 **CONTEXT:**
@@ -99,6 +105,10 @@ ${interviewType === 'dsa' ? `
 - Time: ${elapsedMinutes}/${config.maxDuration} minutes
 - Candidate: ${candidateName}
 - Current Problem: ${currentProblem ? `${currentProblem.title} (${promptEngineer.interviewContext.currentProblemIndex + 1}/${config.problemsCount})` : 'Introduction'}
+${problemChanged ? `
+**PROBLEM CHANGED:** You are now discussing a NEW problem. Start fresh with Phase 1.` : ''}
+${flagAlreadySet ? `
+**FLAG ALREADY SET:** shouldMoveToNextProblem was already set for this problem. DO NOT set it again.` : ''}
 
 **CONVERSATION HISTORY (ANALYZE CAREFULLY):**
 ${conversationHistory}
@@ -139,11 +149,13 @@ ${conversationHistory}
 }
 
 **FLAG RULES:**
-- Set shouldMoveToNextProblem: true when:
+- Set shouldMoveToNextProblem: true ONLY ONCE per problem when:
   * All phases for current problem are complete
   * OR discussed same problem for 3+ questions
   * OR candidate explained implementation
-  * **BE AGGRESSIVE - don't loop**`;
+- **CRITICAL:** Once you set shouldMoveToNextProblem: true, NEVER set it again for the same problem
+- **CRITICAL:** After setting the flag, the problem will change automatically - don't set it again
+- **CRITICAL:** Only set this flag when you're 100% ready to move to the next problem`;
 
         const aiResponse = await ask(nextQuestionPrompt, promptEngineer.companyInfo);
         

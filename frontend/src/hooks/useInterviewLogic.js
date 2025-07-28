@@ -147,19 +147,22 @@ export const useInterviewLogic = (isOngoing = false, sessionIdFromProps = null) 
       const audioResponse = await interviewService.uploadAudio(blob);
       
       if (audioResponse.transcript) {
+        // Get the shouldMoveToNextProblem flag from the last question response
+        const lastQuestion = questions[questions.length - 1];
+        const shouldMoveFlag = lastQuestion?.shouldMoveToNextProblem || false;
+        
         const nextQuestionResponse = await interviewService.getNextQuestion(
           sessionId,
           audioResponse.transcript,
           audioResponse.toneMatrix,
-          questions.length + 1
+          questions.length + 1,
+          shouldMoveFlag
         );
 
         if (nextQuestionResponse.question) {
           setCurrentQuestion(nextQuestionResponse.question);
-          addQuestion(nextQuestionResponse.question, 'Next Question');
+          addQuestion(nextQuestionResponse.question, 'Next Question', nextQuestionResponse.shouldMoveToNextProblem);
           setCurrentRound(nextQuestionResponse.round || questions.length + 1);
-          
-
           
           if (nextQuestionResponse.shouldMoveToNextProblem) {
             setCurrentProblemIndex(prev => prev + 1);

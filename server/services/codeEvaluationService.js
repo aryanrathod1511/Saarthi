@@ -53,13 +53,17 @@ ${userCode}
 **EVALUATION TASK:**
 Please provide a comprehensive evaluation of the candidate's code. Consider the following aspects:
 
-1. **Correctness (60% weight)**: Does the code solve the problem correctly? Test with the provided examples and consider edge cases.
+1. **Syntax & Compilation (30% weight)**: Check for syntax errors, missing semicolons, brackets, imports, etc. If code won't compile, score this very low.
 
-2. **Efficiency (10% weight)**: Analyze time and space complexity. Is it optimal for this problem?
+2. **Correctness (40% weight)**: Does the code solve the problem correctly? Test with the provided examples and consider edge cases.
 
-3. **Code Quality (10% weight)**: Is the code readable, well-structured, and maintainable?
+3. **Efficiency (10% weight)**: Analyze time and space complexity. Is it optimal for this problem?
 
-4. **Edge Cases (20% weight)**: Does the code handle boundary conditions and edge cases?
+4. **Code Quality (10% weight)**: Is the code readable, well-structured, and maintainable?
+
+5. **Edge Cases (10% weight)**: Does the code handle boundary conditions and edge cases?
+
+**CRITICAL:** If you find ANY syntax errors, compilation issues, or logical errors, point them out clearly and score accordingly.
 
 **RESPONSE FORMAT:**
 Provide your evaluation in the following JSON format:
@@ -68,6 +72,7 @@ Provide your evaluation in the following JSON format:
   "score": <overall_score_0_100>,
   "feedback": "<brief_overall_feedback>",
   "detailedAnalysis": {
+    "syntax": "<analysis_of_syntax_and_compilation_issues>",
     "correctness": "<analysis_of_correctness>",
     "efficiency": "<analysis_of_time_space_complexity>",
     "readability": "<analysis_of_code_quality>",
@@ -91,7 +96,9 @@ Provide your evaluation in the following JSON format:
 - Be thorough but constructive in your feedback
 - Provide specific suggestions for improvement
 - Consider the problem's difficulty level when evaluating
-- If the code has syntax errors, explain them clearly
+- **CRITICAL:** If the code has syntax errors, explain them clearly and score very low
+- **CRITICAL:** Check for missing semicolons, brackets, imports, variable declarations
+- **CRITICAL:** If code won't compile, make this the primary focus of feedback
 - Suggest optimizations if applicable
 
 Please provide your evaluation in valid JSON format only.`;

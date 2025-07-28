@@ -43,11 +43,13 @@ const systemPrompt = `You are an expert DSA interviewer. Analyze conversation hi
 - **Don't repeat completed phases**
 
 **FLAG RULES:**
-- Set shouldMoveToNextProblem: true when:
+- Set shouldMoveToNextProblem: true ONLY ONCE per problem when:
   * All phases for current problem are complete
   * OR discussed same problem for 3+ questions  
   * OR candidate explained implementation
-  * **BE AGGRESSIVE - don't loop**
+- **CRITICAL:** Once you set shouldMoveToNextProblem: true, NEVER set it again for the same problem
+- **CRITICAL:** After setting the flag, the problem will change automatically - don't set it again
+- **CRITICAL:** Only set this flag when you're 100% ready to move to the next problem
 
 **DSA PROBLEMS ARE PRE-LOADED** - don't try to "show" problems
 

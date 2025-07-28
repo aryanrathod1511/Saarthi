@@ -117,14 +117,15 @@ class InterviewService {
     }
 
     // Get next question
-    async getNextQuestion(sessionId, transcript, toneMatrix, round) {
+    async getNextQuestion(sessionId, transcript, toneMatrix, round, shouldMoveToNextProblem = false) {
         return this.makeRequest('/api/interview/next-question', {
             method: 'POST',
             body: JSON.stringify({
                 sessionId,
                 transcript,
                 toneMatrix,
-                round
+                round,
+                shouldMoveToNextProblem
             })
         });
     }

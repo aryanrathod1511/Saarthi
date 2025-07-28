@@ -31,7 +31,10 @@ const interviewReducer = (state, action) => {
         case 'ADD_QUESTION':
             return {
                 ...state,
-                questions: [...(state.questions || []), action.payload]
+                questions: [...(state.questions || []), {
+                    ...action.payload,
+                    shouldMoveToNextProblem: action.payload.shouldMoveToNextProblem || false
+                }]
             };
         case 'SET_CURRENT_ROUND':
             return { ...state, currentRound: action.payload };
@@ -159,8 +162,8 @@ export const InterviewProvider = ({ children }) => {
         dispatch({ type: 'SET_CURRENT_QUESTION', payload: question });
     };
 
-    const addQuestion = (question, type = 'question') => {
-        dispatch({ type: 'ADD_QUESTION', payload: { question, type, timestamp: Date.now() } });
+    const addQuestion = (question, type = 'question', shouldMoveToNextProblem = false) => {
+        dispatch({ type: 'ADD_QUESTION', payload: { question, type, shouldMoveToNextProblem, timestamp: Date.now() } });
     };
 
     const setCurrentRound = (round) => {

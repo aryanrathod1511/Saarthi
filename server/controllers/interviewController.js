@@ -197,7 +197,18 @@ export const nextQuestion = async (req, res) => {
             toneMetrics: toneMatrix || {}
         });
 
-        // Get current problem for DSA interviews
+        // Handle shouldMoveToNextProblem flag FIRST (before generating next question)
+        if (req.body.shouldMoveToNextProblem) {
+            const currentIndex = promptEngineer.interviewContext.currentProblemIndex || 0;
+            const dsaProblems = promptEngineer.interviewContext.dsaProblems;
+            
+            if (dsaProblems && currentIndex < dsaProblems.length - 1) {
+                promptEngineer.interviewContext.currentProblemIndex = currentIndex + 1;
+                console.log(`Moving to next problem: ${currentIndex + 1} of ${dsaProblems.length}`);
+            }
+        }
+
+        // Get current problem for DSA interviews (after potential index update)
         let currentProblem = null;
         if (promptEngineer.interviewContext.interviewType.toLowerCase() === 'dsa') {
             const dsaProblems = promptEngineer.interviewContext.dsaProblems;
@@ -213,7 +224,8 @@ export const nextQuestion = async (req, res) => {
             toneMetrics: toneMatrix || {},
             elapsedMinutes: elapsedMinutes,
             currentProblem: currentProblem,
-            dsaProblemContext: currentProblem ? `DSA Problem: ${currentProblem.title} - ${currentProblem.description}` : null
+            dsaProblemContext: currentProblem ? `DSA Problem: ${currentProblem.title} - ${currentProblem.description}` : null,
+            problemChanged: req.body.shouldMoveToNextProblem || false
         };
 
         const nextQuestionResponse = await interviewFlowService.generateNextQuestion(promptEngineer, context);
@@ -223,16 +235,6 @@ export const nextQuestion = async (req, res) => {
             currentRound: (promptEngineer.interviewContext.questionHistory.length + 1),
             currentQuestion: nextQuestionResponse.question
         });
-
-        // Handle shouldMoveToNextProblem flag
-        if (nextQuestionResponse.shouldMoveToNextProblem) {
-            const currentIndex = promptEngineer.interviewContext.currentProblemIndex || 0;
-            const dsaProblems = promptEngineer.interviewContext.dsaProblems;
-            
-            if (dsaProblems && currentIndex < dsaProblems.length - 1) {
-                promptEngineer.interviewContext.currentProblemIndex = currentIndex + 1;
-            }
-        }
 
         // Prepare response object
         const response = {
