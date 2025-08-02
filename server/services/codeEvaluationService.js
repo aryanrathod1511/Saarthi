@@ -21,101 +21,66 @@ class CodeEvaluationService {
             console.error('Error evaluating code:', error);
             return {
                 score: 0,
-                feedback: "Error evaluating code. Please try again.",
-                detailedAnalysis: {
-                    correctness: "Unable to evaluate",
-                    efficiency: "Unable to evaluate",
-                    readability: "Unable to evaluate",
-                    edgeCases: "Unable to evaluate",
-                    bestPractices: "Unable to evaluate"
-                },
-                suggestions: [],
-                timeComplexity: "Unable to determine",
-                spaceComplexity: "Unable to determine"
+                overallFeedback: "Error evaluating code. Please try again.",
+                strengths: [],
+                weaknesses: ["Unable to evaluate code due to system error"]
             };
         }
     }
 
     buildEvaluationPrompt(userCode, problem, language) {
-        return `You are an expert programming interviewer evaluating a candidate's solution to a DSA problem.
+        return `You are a senior software engineer evaluating a candidate's DSA solution.
 
-**PROBLEM DETAILS:**
-Title: ${problem.title}
-Description: ${problem.description}
-Difficulty: ${problem.difficulty}
-Topics: ${problem.topics.join(', ')}
+**Problem:** ${problem.title}
+**Description:** ${problem.description}
+**Difficulty:** ${problem.difficulty}
 
-**CANDIDATE'S CODE (${language.toUpperCase()}):**
+**Candidate's Code (${language}):**
 \`\`\`${language}
 ${userCode}
 \`\`\`
 
-**EVALUATION TASK:**
-Please provide a comprehensive evaluation of the candidate's code. Consider the following aspects:
+**Evaluation Criteria:**
+- Correctness (40%): Does it solve the problem correctly?
+- Efficiency (25%): Is time/space complexity optimal?
+- Code Quality (20%): Is it readable and well-structured?
+- Edge Cases (10%): Does it handle boundary conditions?
+- Best Practices (5%): Does it follow language conventions?
 
-1. **Syntax & Compilation (30% weight)**: Check for syntax errors, missing semicolons, brackets, imports, etc. If code won't compile, score this very low.
+**Scoring:** 0-50 scale
+- 40-50: Excellent, optimal solution
+- 30-39: Good, minor issues
+- 20-29: Average, needs improvement
+- 10-19: Below average, significant issues
+- 0-9: Poor, major errors
 
-2. **Correctness (40% weight)**: Does the code solve the problem correctly? Test with the provided examples and consider edge cases.
-
-3. **Efficiency (10% weight)**: Analyze time and space complexity. Is it optimal for this problem?
-
-4. **Code Quality (10% weight)**: Is the code readable, well-structured, and maintainable?
-
-5. **Edge Cases (10% weight)**: Does the code handle boundary conditions and edge cases?
-
-**CRITICAL:** If you find ANY syntax errors, compilation issues, or logical errors, point them out clearly and score accordingly.
-
-**RESPONSE FORMAT:**
-Provide your evaluation in the following JSON format:
-
+**Response Format (JSON only):**
 {
-  "score": <overall_score_0_100>,
-  "feedback": "<brief_overall_feedback>",
-  "detailedAnalysis": {
-    "syntax": "<analysis_of_syntax_and_compilation_issues>",
-    "correctness": "<analysis_of_correctness>",
-    "efficiency": "<analysis_of_time_space_complexity>",
-    "readability": "<analysis_of_code_quality>",
-    "edgeCases": "<analysis_of_edge_case_handling>",
-    "bestPractices": "<analysis_of_coding_practices>"
-  },
-  "suggestions": ["<suggestion_1>", "<suggestion_2>", ...],
-  "timeComplexity": "<O(n) notation>",
-  "spaceComplexity": "<O(n) notation>",
-  "testCases": [
-    {
-      "input": "<test_input>",
-      "expectedOutput": "<expected_output>",
-      "actualOutput": "<what_code_would_produce>",
-      "passed": <true/false>
-    }
-  ]
+  "score": <0-50>,
+  "overallFeedback": "<comprehensive_feedback>",
+  "strengths": ["<strength_1>", "<strength_2>"],
+  "weaknesses": ["<weakness_1>", "<weakness_2>"]
 }
 
-**IMPORTANT:**
-- Be thorough but constructive in your feedback
-- Provide specific suggestions for improvement
-- Consider the problem's difficulty level when evaluating
-- **CRITICAL:** If the code has syntax errors, explain them clearly and score very low
-- **CRITICAL:** Check for missing semicolons, brackets, imports, variable declarations
-- **CRITICAL:** If code won't compile, make this the primary focus of feedback
-- Suggest optimizations if applicable
-
-Please provide your evaluation in valid JSON format only.`;
+Be thorough, constructive, and specific. Focus on algorithmic thinking and implementation quality.`;
     }
 
     parseEvaluationResponse(response) {
         try {
-            // Ensure response is a string
             const responseText = typeof response === 'string' ? response : JSON.stringify(response);
-            
-            // Try to extract JSON from the response
             const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            
             if (jsonMatch) {
-                return JSON.parse(jsonMatch[0]);
+                const parsed = JSON.parse(jsonMatch[0]);
+                
+                return {
+                    score: Math.max(0, Math.min(50, parseInt(parsed.score) || 25)),
+                    overallFeedback: parsed.overallFeedback || "No feedback provided",
+                    strengths: Array.isArray(parsed.strengths) ? parsed.strengths : [],
+                    weaknesses: Array.isArray(parsed.weaknesses) ? parsed.weaknesses : []
+                };
             }
             
-            // Fallback parsing
             return this.fallbackParsing(responseText);
         } catch (error) {
             console.error('Error parsing evaluation response:', error);
@@ -125,47 +90,45 @@ Please provide your evaluation in valid JSON format only.`;
 
     fallbackParsing(response) {
         try {
-            // Ensure response is a string
             const responseText = typeof response === 'string' ? response : JSON.stringify(response);
-            
-            // Extract key information from text response
             const scoreMatch = responseText.match(/score[:\s]*(\d+)/i);
-            const timeComplexityMatch = responseText.match(/time.*complexity[:\s]*(O\([^)]+\))/i);
-            const spaceComplexityMatch = responseText.match(/space.*complexity[:\s]*(O\([^)]+\))/i);
+            const extractedScore = scoreMatch ? parseInt(scoreMatch[1]) : 25;
             
             return {
-                score: scoreMatch ? parseInt(scoreMatch[1]) : 50,
-                feedback: responseText.substring(0, 200) + "...",
-                detailedAnalysis: {
-                    correctness: "Analysis not available",
-                    efficiency: "Analysis not available",
-                    readability: "Analysis not available",
-                    edgeCases: "Analysis not available",
-                    bestPractices: "Analysis not available"
-                },
-                suggestions: [],
-                timeComplexity: timeComplexityMatch ? timeComplexityMatch[1] : "Unknown",
-                spaceComplexity: spaceComplexityMatch ? spaceComplexityMatch[1] : "Unknown"
+                score: Math.max(0, Math.min(50, extractedScore)),
+                overallFeedback: responseText.substring(0, 300) + "...",
+                strengths: ["Code evaluation completed"],
+                weaknesses: ["Unable to parse detailed feedback"]
             };
         } catch (error) {
             console.error('Error in fallback parsing:', error);
             return {
-                score: 50,
-                feedback: "Unable to parse evaluation response",
-                detailedAnalysis: {
-                    correctness: "Analysis not available",
-                    efficiency: "Analysis not available",
-                    readability: "Analysis not available",
-                    edgeCases: "Analysis not available",
-                    bestPractices: "Analysis not available"
-                },
-                suggestions: [],
-                timeComplexity: "Unknown",
-                spaceComplexity: "Unknown"
+                score: 25,
+                overallFeedback: "Unable to parse evaluation response",
+                strengths: ["Evaluation attempted"],
+                weaknesses: ["System error in parsing feedback"]
             };
         }
     }
 
+    determineNextAction(score) {
+        if (score >= 35) {
+            return {
+                action: 'nextProblem',
+                reason: 'High score achieved - ready for next problem'
+            };
+        } else if (score >= 20) {
+            return {
+                action: 'followup',
+                reason: 'Medium score - need followup questions'
+            };
+        } else {
+            return {
+                action: 'followup',
+                reason: 'Low score - extensive followup needed'
+            };
+        }
+    }
 }
 
 export default new CodeEvaluationService(); 

@@ -14,9 +14,8 @@ if (!GEMINI_API_KEY) {
 // Updated model endpoints - using current Gemini API models
 const GEMINI_MODELS = [
     "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
-    "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent",
-    "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent",
-    "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent"
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent"
 ];
 
 let GEMINI_API_URL = GEMINI_MODELS[0]; // Start with the first model
@@ -27,28 +26,31 @@ const systemPrompt = `You are an expert DSA interviewer. Analyze conversation hi
 **RESPONSE FORMAT:**
 {
   "question": "Your next question",
-  "feedback": "Analysis of their response", 
+  "feedback": {
+    "score": <0-50>,
+    "overallFeedback": "<feedback>",
+    "strengths": ["<strength>"],
+    "weaknesses": ["<weakness>"]
+  },
   "shouldMoveToNextProblem": false,
-  "isWrapUp": false
+  "isWrapUp": false,
+  "currentStage": "<stage_name>",
+  "stageProgress": "<explanation>"
 }
 
-**9-PHASE STRUCTURE:**
-1. Approach Discussion 2. Clarifying Questions 3. Edge Cases 4. Time Complexity 5. Space Complexity 6. Constraints Check 7. Implementation Request 8. Code Evaluation 9. Move to Next
-
-**SMART DETECTION:**
-- If candidate mentioned code/implementation → Phases 7-8 complete
-- If discussed complexity → Phases 4-5 complete
-- If discussed edge cases → Phase 3 complete
-- If asked about approach → Phase 1 complete
-- **Don't repeat completed phases**
+**DSA INTERVIEW STAGES:**
+1. Problem Intro - "What are your initial thoughts?"
+2. Approach Discussion - "How would you approach this?"
+3. Approach Refinement - Discuss optimization if needed
+4. Complexity Analysis - "What's the time/space complexity?"
+5. Edge Cases - "What edge cases should we consider?"
+6. Implementation - "Can you implement this?"
+7. Code Evaluation - Ask followup questions based on code
+8. Completion - Move to next problem when satisfied
 
 **FLAG RULES:**
-- Set shouldMoveToNextProblem: true ONLY ONCE per problem when:
-  * All phases for current problem are complete
-  * OR discussed same problem for 3+ questions  
-  * OR candidate explained implementation
+- Set shouldMoveToNextProblem: true ONLY when all stages complete OR they demonstrate good understanding
 - **CRITICAL:** Once you set shouldMoveToNextProblem: true, NEVER set it again for the same problem
-- **CRITICAL:** After setting the flag, the problem will change automatically - don't set it again
 - **CRITICAL:** Only set this flag when you're 100% ready to move to the next problem
 
 **DSA PROBLEMS ARE PRE-LOADED** - don't try to "show" problems
@@ -70,7 +72,7 @@ export const ask = async(prompt, companyInfo = null) => {
 ${prompt}
 
 **QUALITY INTERVIEW REQUIREMENTS:**
-- Follow the structured 9-phase problem flow for DSA interviews
+- Follow the structured 8-stage problem flow for DSA interviews
 - **DSA PROBLEMS ARE PRE-LOADED** - don't try to "show" or "introduce" problems
 - Ask follow-up questions to dig deeper into responses
 - Ensure sufficient depth before moving to next problem
@@ -79,7 +81,7 @@ ${prompt}
 - Acknowledge previous responses before asking new questions
 - Adapt difficulty based on candidate performance
 - **EFFICIENCY:** Don't spend too long on a single problem - move through problems systematically
-- **STRUCTURED APPROACH:** Follow the defined phases: problem discussion → implementation → evaluation → next problem
+- **STRUCTURED APPROACH:** Follow the defined stages: problem discussion → implementation → evaluation → next problem
 - **AGGRESSIVE MOVEMENT:** Don't hesitate - complete the flow and move on
 
 **REMEMBER**: Respond with ONLY JSON containing all required fields. NO thinking text, NO explanations.`;
@@ -125,17 +127,19 @@ ${prompt}
             console.log("Result:", result);
 
             // Enhanced JSON parsing with all required fields
-            let question, feedback, shouldMoveToNextProblem, isWrapUp;
+            let question, feedback, shouldMoveToNextProblem, isWrapUp, currentStage, stageProgress;
             
             try {
                 const jsonMatch = result.match(/\{[\s\S]*\}/);
                 if (jsonMatch) {
                     const jsonResponse = JSON.parse(jsonMatch[0]);
-                    console.log("JSON Response:", jsonResponse);
+                    console.log("JSON Response from AI:", jsonResponse);
                     question = jsonResponse.question;
                     feedback = jsonResponse.feedback;
                     shouldMoveToNextProblem = jsonResponse.shouldMoveToNextProblem;
                     isWrapUp = jsonResponse.isWrapUp;
+                    currentStage = jsonResponse.currentStage;
+                    stageProgress = jsonResponse.stageProgress;
                 }
             } catch (jsonError) {
                 console.log('JSON parsing failed, using fallback');
@@ -144,14 +148,36 @@ ${prompt}
             // Fallback: use the entire response as question
             if (!question) {
                 question = cleanResponse(result);
-                feedback = "Response parsed as question";
+                feedback = {
+                    score: 25,
+                    overallFeedback: "Response parsed as question",
+                    strengths: ["Engaged"],
+                    weaknesses: ["Need more analysis"]
+                };
+            }
+
+            // Ensure feedback is an object with the correct structure
+            if (typeof feedback === 'string') {
+                feedback = {
+                    score: 25,
+                    overallFeedback: feedback,
+                    strengths: ["Engaged"],
+                    weaknesses: ["Need more analysis"]
+                };
             }
 
             return {
                 question: question ? question.trim() : "Please provide your response to continue the interview.",
-                feedback: feedback ? feedback.trim() : "No specific feedback for this round.",
+                feedback: feedback || {
+                    score: 25,
+                    overallFeedback: "No specific feedback for this round.",
+                    strengths: ["Engaged"],
+                    weaknesses: ["Need more analysis"]
+                },
                 shouldMoveToNextProblem: shouldMoveToNextProblem || false,
-                isWrapUp: isWrapUp || false
+                isWrapUp: isWrapUp || false,
+                currentStage: currentStage || "Analyzing",
+                stageProgress: stageProgress || "Continuing"
             };
         } catch (error) {
             console.error(`Model ${i + 1} failed:`, error.message);
@@ -198,15 +224,17 @@ function cleanResponse(text) {
     ];
     
     let cleaned = text;
+    
+    // Apply thinking pattern removals
     thinkingPatterns.forEach(pattern => {
         cleaned = cleaned.replace(pattern, '');
     });
     
-    // Remove extra whitespace and newlines
+    // Remove extra whitespace and normalize
     cleaned = cleaned.replace(/\s+/g, ' ').trim();
     
-    // If the response starts with quotes, remove them
-    cleaned = cleaned.replace(/^["']|["']$/g, '');
+    // Remove JSON formatting if present
+    cleaned = cleaned.replace(/```json\s*/g, '').replace(/```\s*/g, '');
     
     return cleaned;
 }

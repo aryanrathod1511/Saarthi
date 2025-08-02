@@ -11,6 +11,7 @@ import codeEvaluationService from "../services/codeEvaluationService.js";
 import interviewFlowService from "../services/interviewFlowService.js";
 import Interview from "../models/Interview.js";
 import User from "../models/User.js";
+import comprehensiveFeedbackService from '../services/comprehensiveFeedbackService.js';
 
 
 export const uploadResume = async (req, res) => {
@@ -478,58 +479,58 @@ export const submitCode = async (req, res) => {
     try {
         const { sessionId, code, language = 'java' } = req.body;
 
-        if (!sessionId || !code) {
+        if (!sessionId) {
             return res.status(400).json({
-                error: 'Session ID and code are required'
+                error: 'Session ID is required'
             });
         }
 
         const promptEngineer = getSession(sessionId);
-
         if (!promptEngineer) {
             return res.status(400).json({
                 error: 'Interview not initialized. Please upload resume first.'
             });
         }
 
+        // Get current problem
         const dsaProblems = promptEngineer.interviewContext.dsaProblems;
         const currentIndex = promptEngineer.interviewContext.currentProblemIndex || 0;
+        const currentProblem = dsaProblems && currentIndex < dsaProblems.length ? dsaProblems[currentIndex] : null;
 
-        if (!dsaProblems || currentIndex >= dsaProblems.length) {
-            return res.status(404).json({
-                error: 'No current problem available'
+        if (!currentProblem) {
+            return res.status(400).json({
+                error: 'No current problem found'
             });
         }
 
-        const currentProblem = dsaProblems[currentIndex];
-
         // Evaluate the code
         const evaluation = await codeEvaluationService.evaluateCode(code, currentProblem, language);
-
-        // Store evaluation in session
-        if (!promptEngineer.interviewContext.codeEvaluations) {
-            promptEngineer.interviewContext.codeEvaluations = [];
-        }
         
-        promptEngineer.interviewContext.codeEvaluations.push({
-            problemId: currentProblem.id,
+        // Store evaluation in session for comprehensive feedback
+        if (!promptEngineer.interviewContext.evaluations) {
+            promptEngineer.interviewContext.evaluations = [];
+        }
+        promptEngineer.interviewContext.evaluations.push({
             problemTitle: currentProblem.title,
-            code: code,
-            language: language,
+            problemIndex: currentIndex,
             evaluation: evaluation,
-            timestamp: new Date().toISOString()
+            timestamp: new Date()
         });
-
+        
+        // Determine next action based on score
+        const nextAction = codeEvaluationService.determineNextAction(evaluation.score);
+        
         // Get the DSA problem context
         const dsaProblemContext = `DSA Problem: ${currentProblem.title} - ${currentProblem.description}`;
         
-        // Generate next question using flow service
+        // Generate next question using flow service with evaluation context
         const context = {
             transcript: `Code submitted for problem: ${currentProblem.title}`,
             toneMetrics: {},
             elapsedMinutes: Math.floor((new Date() - promptEngineer.interviewContext.startTime) / (1000 * 60)),
             currentProblem: currentProblem,
-            dsaProblemContext: dsaProblemContext
+            dsaProblemContext: dsaProblemContext,
+            lastEvaluation: evaluation
         };
 
         const nextQuestionResponse = await interviewFlowService.generateNextQuestion(promptEngineer, context);
@@ -553,7 +554,13 @@ export const submitCode = async (req, res) => {
         }
 
         res.status(200).json({
-            evaluation: evaluation,
+            evaluation: {
+                score: evaluation.score,
+                overallFeedback: evaluation.overallFeedback,
+                strengths: evaluation.strengths,
+                weaknesses: evaluation.weaknesses,
+                nextAction: nextAction
+            },
             nextQuestion: nextQuestionResponse.question,
             currentProblem: currentProblem,
             currentIndex: currentIndex,
@@ -561,12 +568,79 @@ export const submitCode = async (req, res) => {
             isLastProblem: currentIndex === dsaProblems.length - 1,
             round: promptEngineer.interviewContext.questionHistory.length,
             shouldMoveToNextProblem: nextQuestionResponse.shouldMoveToNextProblem,
-            isWrapUp: nextQuestionResponse.isWrapUp
+            isWrapUp: nextQuestionResponse.isWrapUp,
+            currentStage: nextQuestionResponse.currentStage
         });
 
     } catch (error) {
-        console.error('Error in submitCode:', error);
-        res.status(500).json({ error: 'Failed to evaluate code' });
+        console.error('Error submitting code:', error);
+        res.status(500).json({
+            error: 'Failed to submit code',
+            details: error.message
+        });
+    }
+};
+
+// New endpoint for comprehensive feedback
+export const getComprehensiveFeedback = async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+
+        if (!sessionId) {
+            return res.status(400).json({
+                error: 'Session ID is required'
+            });
+        }
+
+        const promptEngineer = getSession(sessionId);
+        if (!promptEngineer) {
+            return res.status(400).json({
+                error: 'Interview session not found'
+            });
+        }
+
+        // Get all evaluations from the session
+        const evaluations = promptEngineer.interviewContext.evaluations || [];
+        
+        if (evaluations.length === 0) {
+            return res.status(400).json({
+                error: 'No evaluations found for this interview'
+            });
+        }
+
+        // Prepare interview data
+        const interviewData = {
+            companyInfo: promptEngineer.companyInfo,
+            resumeData: promptEngineer.resumeData,
+            interviewContext: promptEngineer.interviewContext
+        };
+
+        // Extract evaluation data - Fixed: changed 'eval' to 'evaluation'
+        const evaluationData = evaluations.map(evaluation => evaluation.evaluation);
+
+        // Generate comprehensive feedback
+        const comprehensiveFeedback = await comprehensiveFeedbackService.generateComprehensiveFeedback(
+            interviewData, 
+            evaluationData
+        );
+
+        res.status(200).json({
+            comprehensiveFeedback: comprehensiveFeedback,
+            problemEvaluations: evaluations,
+            interviewSummary: {
+                totalProblems: evaluations.length,
+                averageScore: evaluationData.reduce((sum, evaluation) => sum + evaluation.score, 0) / evaluationData.length,
+                highestScore: Math.max(...evaluationData.map(evaluation => evaluation.score)),
+                lowestScore: Math.min(...evaluationData.map(evaluation => evaluation.score))
+            }
+        });
+
+    } catch (error) {
+        console.error('Error generating comprehensive feedback:', error);
+        res.status(500).json({
+            error: 'Failed to generate comprehensive feedback',
+            details: error.message
+        });
     }
 };
 

@@ -36,42 +36,22 @@ class InterviewFlowService {
     }
 
     async generateWelcomeMessage(promptEngineer) {
-        const { interviewType, experienceLevel } = promptEngineer.interviewContext;
-        const { name, type, role } = promptEngineer.companyInfo;
+        const { interviewType } = promptEngineer.interviewContext;
+        const { name, role } = promptEngineer.companyInfo;
         const candidateName = promptEngineer.resumeData?.name || 'the candidate';
-        const config = this.getInterviewConfig(interviewType);
 
-        let welcomePrompt = promptEngineer.getSystemPrompt() + `**INTERVIEW WELCOME MESSAGE**
+        let welcomePrompt = promptEngineer.getSystemPrompt() + `**INTERVIEW WELCOME**
 
-You are starting a ${interviewType.toUpperCase()} interview at ${name}. 
-
-**INTERVIEW CONFIGURATION:**
-- Duration: ${config.maxDuration} minutes
-- Wrap-up threshold: ${config.wrapUpThreshold} minutes
-- Experience Level: ${experienceLevel}
+You are starting a ${interviewType.toUpperCase()} interview at ${name} for ${role} position.
 
 **Your Task:**
-1. **Welcome the candidate warmly** - "Hi ${candidateName}, I'm [Select an indian name (male only)] from ${name}. Thanks for joining us today."
-2. **Introduce yourself** briefly
-3. **Set interview expectations** - mention this is a ${interviewType} interview for ${role} position
-4. **Ask for their brief introduction** - name, background, what interests them about this role
-5. **Be professional but warm** - make them comfortable
+1. Welcome the candidate warmly: "Hi ${candidateName}, I'm [Indian male name] from ${name}. Thanks for joining us today."
+2. Ask for their brief introduction: name, background, what interests them about this role
 
 ${interviewType === 'dsa' ? `
-**DSA INTERVIEW SPECIFIC:**
-- After their introduction response, mention: "We'll be working through 4 coding problems together. Each problem will be displayed on your screen with a code editor where you can write and submit your solutions."
-- Explain the format: "For each problem, you'll see the problem statement, sample test cases, and a code editor on the right side of your screen."
-` : ''}
+**DSA INTERVIEW:** Mention that you'll work through 4 coding problems together, each displayed on screen with a code editor.` : ''}
 
-**Important Guidelines:**
-- Keep the introduction concise (2-3 minutes)
-- Ask only ONE question to start (their introduction)
-- Don't rush into technical questions yet
-- Make it feel like a real interview starting
-
-**Candidate Info:**
-- Name: ${candidateName}
-- Resume: ${promptEngineer.resumeData?.rawText || 'Not provided'}`;
+Keep the introduction concise (2-3 minutes).`;
 
         const aiResponse = await ask(welcomePrompt, promptEngineer.companyInfo);
         return this.cleanAIResponse(aiResponse);
@@ -79,9 +59,9 @@ ${interviewType === 'dsa' ? `
 
 
     async generateNextQuestion(promptEngineer, context = {}) {
-        const { interviewType, experienceLevel } = promptEngineer.interviewContext;
-        const { name, type, role } = promptEngineer.companyInfo;
-        const { transcript, toneMetrics, elapsedMinutes, currentProblem, dsaProblemContext } = context;
+        const { interviewType } = promptEngineer.interviewContext;
+        const { name, role } = promptEngineer.companyInfo;
+        const { transcript, elapsedMinutes, currentProblem, lastEvaluation } = context;
         const candidateName = promptEngineer.resumeData?.name || 'the candidate';
         const config = this.getInterviewConfig(interviewType);
 
@@ -89,290 +69,215 @@ ${interviewType === 'dsa' ? `
             return await this.generateWrapUpQuestion(promptEngineer, context);
         }
 
-        // Build conversation history
         const conversationHistory = this.buildConversationHistory(promptEngineer);
-        
-        // Check if problem changed
         const problemChanged = context.problemChanged || false;
-        
-        // Check if flag was already set for current problem
-        const flagAlreadySet = promptEngineer.interviewContext.flagSetForCurrentProblem || false;
         
         let nextQuestionPrompt = promptEngineer.getSystemPrompt() + `**DSA INTERVIEW - NEXT QUESTION**
 
-**CONTEXT:**
-- Company: ${name} | Role: ${role} | Type: ${interviewType}
-- Time: ${elapsedMinutes}/${config.maxDuration} minutes
-- Candidate: ${candidateName}
-- Current Problem: ${currentProblem ? `${currentProblem.title} (${promptEngineer.interviewContext.currentProblemIndex + 1}/${config.problemsCount})` : 'Introduction'}
-${problemChanged ? `
-**PROBLEM CHANGED:** You are now discussing a NEW problem. Start fresh with Phase 1.` : ''}
-${flagAlreadySet ? `
-**FLAG ALREADY SET:** shouldMoveToNextProblem was already set for this problem. DO NOT set it again.` : ''}
+**Context:** ${name} | ${role} | ${elapsedMinutes}/${config.maxDuration} min | ${candidateName}
+**Problem:** ${currentProblem ? `${currentProblem.title} (${promptEngineer.interviewContext.currentProblemIndex + 1}/${config.problemsCount})` : 'Introduction'}
+${problemChanged ? '**NEW PROBLEM:** Start fresh with Stage 1.' : ''}
 
-**CONVERSATION HISTORY (ANALYZE CAREFULLY):**
+**Conversation History:**
 ${conversationHistory}
 
-**CURRENT RESPONSE:**
-"${transcript || 'No response yet'}"
+**Current Response:** "${transcript || 'No response yet'}"
 
-**YOUR TASK:**
-1. **Analyze the conversation history** - understand what phases have been completed
-2. **Determine the next phase** based on the 9-phase structure
-3. **Ask ONE focused question** that moves the interview forward
-4. **Set shouldMoveToNextProblem: true** if ready to move to next problem
+**Interview Stages:**
+1. **Problem Intro** - "What are your initial thoughts?"
+2. **Approach Discussion** - "How would you approach this?"
+3. **Approach Refinement** - Discuss optimization if needed
+4. **Complexity Analysis** - "What's the time/space complexity?"
+5. **Edge Cases** - "What edge cases should we consider?"
+6. **Implementation** - "Can you implement this?"
+7. **Code Evaluation** - Ask followup questions based on code
+8. **Completion** - Move to next problem when satisfied
 
-**9-PHASE STRUCTURE:**
-1. **Approach Discussion** - discuss solution approach
-2. **Clarifying Questions** - answer candidate questions
-3. **Edge Cases** - discuss edge cases
-4. **Time Complexity** - discuss O(n) analysis
-5. **Space Complexity** - discuss memory usage
-6. **Constraints Check** - compare with problem constraints
-7. **Implementation Request** - ask for code
-8. **Code Evaluation** - evaluate submitted code
-9. **Move to Next** - set flag and move on
+**Your Task:**
+- Analyze conversation history to determine current stage
+- Ask ONE focused question that moves the interview forward
+- Progress to next stage when they demonstrate understanding
+- Stay in current stage if they need more work
 
-**SMART PHASE DETECTION:**
-- If candidate mentioned implementation/code → Phase 7-8 complete
-- If discussed complexity → Phase 4-5 complete  
-- If discussed edge cases → Phase 3 complete
-- If asked about approach → Phase 1 complete
-- **Don't repeat completed phases**
-
-**RESPONSE FORMAT:**
+**Response Format:**
 {
   "question": "Your next question",
-  "feedback": "Analysis of their response",
+  "feedback": {
+    "score": <0-50>,
+    "overallFeedback": "<feedback>",
+    "strengths": ["<strength>"],
+    "weaknesses": ["<weakness>"]
+  },
   "shouldMoveToNextProblem": false,
-  "isWrapUp": false
+  "isWrapUp": false,
+  "currentStage": "<stage_name>",
+  "stageProgress": "<explanation>"
 }
 
-**FLAG RULES:**
-- Set shouldMoveToNextProblem: true ONLY ONCE per problem when:
-  * All phases for current problem are complete
-  * OR discussed same problem for 3+ questions
-  * OR candidate explained implementation
-- **CRITICAL:** Once you set shouldMoveToNextProblem: true, NEVER set it again for the same problem
-- **CRITICAL:** After setting the flag, the problem will change automatically - don't set it again
-- **CRITICAL:** Only set this flag when you're 100% ready to move to the next problem`;
+**Move to next problem when:** All stages complete OR they've demonstrated good understanding.`;
 
         const aiResponse = await ask(nextQuestionPrompt, promptEngineer.companyInfo);
         
-        // Handle the enhanced response format from ask() function
         if (aiResponse && typeof aiResponse === 'object' && aiResponse.question) {
-            console.log("AI Response received with flags:", {
-                shouldMoveToNextProblem: aiResponse.shouldMoveToNextProblem,
-                isWrapUp: aiResponse.isWrapUp
-            });
-            
             return {
                 question: aiResponse.question,
+                feedback: aiResponse.feedback || this.generateDefaultFeedback(),
                 shouldMoveToNextProblem: aiResponse.shouldMoveToNextProblem || false,
-                isWrapUp: aiResponse.isWrapUp || false
+                isWrapUp: aiResponse.isWrapUp || false,
+                currentStage: aiResponse.currentStage || "Analyzing",
+                stageProgress: aiResponse.stageProgress || "Continuing"
             };
         }
         
         return this.cleanAIResponse(aiResponse);
     }
 
-   
+    generateDefaultFeedback() {
+        return {
+            score: 25,
+            overallFeedback: "Response received, continuing interview",
+            strengths: ["Engaged"],
+            weaknesses: ["Need more analysis"]
+        };
+    }
+
     getDSAInstructions(promptEngineer, config) {
-        const currentRound = promptEngineer.interviewContext.questionHistory?.length || 0;
         const currentProblem = promptEngineer.interviewContext.currentProblem;
-        const currentProblemIndex = promptEngineer.interviewContext.currentProblemIndex || 0;
         
-        // Introduction phase (first 2 rounds)
-        if (!currentProblem || currentRound <= 2) {
-            return `
-**INTRODUCTION PHASE:**
-- Welcome candidate and set expectations
-- Mention ${config.problemsCount} coding problems will be displayed on screen
-- Ask for brief introduction and background
-- **Don't set shouldMoveToNextProblem during introduction**`;
+        if (!currentProblem) {
+            return `**INTRODUCTION:** Welcome and set expectations for ${config.problemsCount} coding problems.`;
         }
 
-        return `
-**PROBLEM DISCUSSION PHASE:**
-- Current: "${currentProblem.title}" (${currentProblemIndex + 1}/${config.problemsCount})
-- Problem is already displayed on screen
-- Follow 9-phase structure from main prompt
-- **Don't repeat completed phases**
-- **Move to next problem when ready**`;
+        return `**PROBLEM:** ${currentProblem.title} - Follow intelligent stage progression.`;
     }
 
     getResumeCSInstructions(promptEngineer, config) {
         const resumeText = promptEngineer.resumeData?.rawText || '';
-        const currentRound = promptEngineer.interviewContext.questionHistory?.length || 0;
         
-        return `
-**RESUME + CS FUNDAMENTALS INTERVIEW:**
-- Focus on projects mentioned in their resume
-- Ask about technologies, challenges, and learning experiences
-- Include CS fundamentals questions (Database management system, Operating system, Computer networks, OOPs, etc)
--Do intensive discussions on the CS fundamnetals subjects mentioned above. also stir them with the project metioned.
-- Ask about their technical background and interests
-- Time management: ${config.maxDuration} minutes total
-- Current time: ${config.maxDuration} minutes remaining
+        return `**RESUME + CS FUNDAMENTALS INTERVIEW**
+- Focus on projects and technologies from resume
+- Ask about CS fundamentals (DBMS, OS, Networks, OOPs)
+- Integrate with projects mentioned
+- After 3-4 questions, introduce a DSA problem
 
-**DSA PROBLEM INTEGRATION:**
-- After 3-4 questions, introduce a DSA problem: "Now let's work on a coding problem together."
-- Choose an appropriate problem based on their experience level
-- The problem will be displayed on the right side with a code editor
-- Guide them through the problem-solving process
-
-**Resume Content:**
-${resumeText}
-
-**Current Round:** ${currentRound}
-**DSA Introduction Timing:** Introduce DSA problem around round 4-5`;
+**Resume:** ${resumeText.substring(0, 200)}...`;
     }
 
-    
     getTechnicalHRInstructions(promptEngineer, config) {
         const resumeText = promptEngineer.resumeData?.rawText || '';
-        const currentRound = promptEngineer.interviewContext.questionHistory?.length || 0;
         
-        return `
-**TECHNICAL + HR INTERVIEW:**
-- Mix technical questions with behavioral/HR questions
-- Ask about their technical background and projects
-- Include behavioral questions about teamwork, challenges, goals
-- Ask about their interest in the company and role
-- Time management: ${config.maxDuration} minutes total
-- Current time: ${config.maxDuration} minutes remaining
+        return `**TECHNICAL + HR INTERVIEW**
+- Mix technical and behavioral questions
+- Ask about background, projects, teamwork, goals
+- After 2-3 questions, introduce a coding problem
 
-**CODING INTEGRATION:**
-- After 2-3 questions, introduce a coding problem: "Let's work on a small coding challenge."
-- Choose a simple problem appropriate for their level
-- The problem will be displayed on the right side with a code editor
-- Guide them through the solution
-
-**Resume Content:**
-${resumeText}
-
-**Current Round:** ${currentRound}
-**Coding Introduction Timing:** Introduce coding around round 3-4`;
+**Resume:** ${resumeText.substring(0, 200)}...`;
     }
 
-    
     getHRInstructions(promptEngineer, config) {
-        return `
-**HR INTERVIEW:**
+        return `**HR INTERVIEW**
 - Focus on behavioral questions and cultural fit
-- Use STAR method for all behavioral questions
-- Ask about career goals, motivation, and work style
-- Assess communication and soft skills
-- Time management: ${config.maxDuration} minutes total
-- Current time: ${config.maxDuration} minutes remaining`;
+- Use STAR method
+- Ask about career goals, motivation, work style`;
     }
 
-    
     async generateWrapUpQuestion(promptEngineer, context) {
         const { name, role } = promptEngineer.companyInfo;
         const candidateName = promptEngineer.resumeData?.name || 'the candidate';
-        const { elapsedMinutes } = context;
 
-        const wrapUpPrompt = promptEngineer.getSystemPrompt() + `**INTERVIEW WRAP-UP**
+        let wrapUpPrompt = promptEngineer.getSystemPrompt() + `**INTERVIEW WRAP-UP**
 
-You are wrapping up the interview at ${name}. The interview has been running for ${elapsedMinutes} minutes.
+**Context:** ${name} | ${role} | ${candidateName}
 
 **Your Task:**
-1. **Acknowledge the time** - "We're coming to the end of our time together."
-2. **Thank them** for their time and participation
-3. **Ask if they have questions** - "Do you have any questions for me about the role, the team, or ${name}?"
-4. **Be prepared to answer** their questions about the company, role, or next steps
-5. **End professionally** - mention next steps in the process
+1. Thank them for their time
+2. Ask if they have questions about the role/company
+3. Provide next steps
+4. End professionally
 
-**Important:**
-- Be warm and professional
-- Give them a chance to ask questions
-- Provide helpful information about next steps
-- End on a positive note
-
-**Candidate Info:**
-- Name: ${candidateName}
-- Role: ${role}`;
+**Response Format:**
+{
+  "question": "Your wrap-up message",
+  "feedback": {
+    "score": 0,
+    "overallFeedback": "Interview completed",
+    "strengths": [],
+    "weaknesses": []
+  },
+  "shouldMoveToNextProblem": false,
+  "isWrapUp": true
+}`;
 
         const aiResponse = await ask(wrapUpPrompt, promptEngineer.companyInfo);
-        const response = this.cleanAIResponse(aiResponse);
         
-        return {
-            ...response,
-            isWrapUp: true,
-            shouldMoveToNextProblem: false
-        };
+        if (aiResponse && typeof aiResponse === 'object' && aiResponse.question) {
+            return {
+                question: aiResponse.question,
+                feedback: aiResponse.feedback || this.generateDefaultFeedback(),
+                shouldMoveToNextProblem: false,
+                isWrapUp: true
+            };
+        }
+        
+        return this.cleanAIResponse(aiResponse);
     }
 
-
     cleanAIResponse(response) {
-        
-        if (response && typeof response === 'object' && response.question) {
+        if (typeof response === 'string') {
             return {
-                question: response.question,
-                feedback: response.feedback || '',
-                shouldMoveToNextProblem: response.shouldMoveToNextProblem || false,
-                isWrapUp: response.isWrapUp || false
-            };
-        }
-
-        // Handle string response (fallback)
-        if (response && typeof response === 'string') {
-            let cleanedQuestion = response
-                .replace(/\*\*/g, '')
-                .replace(/#{1,6}\s/g, '')
-                .replace(/```[\s\S]*?```/g, '')
-                .replace(/`/g, '')
-                .trim();
-
-            cleanedQuestion = cleanedQuestion.replace(/^["']|["']$/g, '');
-            
-            return {
-                question: cleanedQuestion || 'Could you please elaborate on that?',
-                feedback: '',
+                question: response,
+                feedback: this.generateDefaultFeedback(),
                 shouldMoveToNextProblem: false,
-                isWrapUp: false
+                isWrapUp: false,
+                currentStage: "Analyzing",
+                stageProgress: "Continuing"
             };
         }
+        
+        // Ensure feedback is properly structured
+        if (response && typeof response.feedback === 'string') {
+            response.feedback = {
+                score: 25,
+                overallFeedback: response.feedback,
+                strengths: ["Engaged"],
+                weaknesses: ["Need more analysis"]
+            };
+        }
+        
         return {
-            question: 'Could you please elaborate on that?',
-            feedback: '',
-            shouldMoveToNextProblem: false,
-            isWrapUp: false
+            question: response.question || "Please provide your response to continue the interview.",
+            feedback: response.feedback || this.generateDefaultFeedback(),
+            shouldMoveToNextProblem: response.shouldMoveToNextProblem || false,
+            isWrapUp: response.isWrapUp || false,
+            currentStage: response.currentStage || "Analyzing",
+            stageProgress: response.stageProgress || "Continuing"
         };
     }
 
     buildConversationHistory(promptEngineer) {
-        const questions = promptEngineer.interviewContext.questionHistory || [];
-        const responses = promptEngineer.interviewContext.candidateResponses || [];
+        const history = promptEngineer.interviewContext.questionHistory || [];
+        if (history.length === 0) return "No previous conversation.";
         
-        if (questions.length === 0) {
-            return 'No previous conversation';
-        }
-
-        let history = '';
-        const maxHistory = Math.min(questions.length, 5); // Last 5 exchanges
-        
-        for (let i = Math.max(0, questions.length - maxHistory); i < questions.length; i++) {
-            const question = questions[i];
-            const response = responses[i] || 'No response';
-            
-            history += `**Round ${i + 1}:**\n`;
-            history += `Q: ${question}\n`;
-            history += `A: ${response}\n\n`;
-        }
-        
-        return history;
+        return history.map((entry, index) => {
+            const round = index + 1;
+            const problemInfo = entry.problemTitle ? ` (${entry.problemTitle})` : '';
+            return `Round ${round}${problemInfo}:
+Q: ${entry.question}
+A: ${entry.answer || 'No response'}`;
+        }).join('\n\n');
     }
 
     formatToneAnalysis(toneMetrics) {
         if (!toneMetrics || Object.keys(toneMetrics).length === 0) {
-            return 'No tone data available';
+            return 'No tone analysis available';
         }
-
-        return Object.entries(toneMetrics)
-            .map(([key, value]) => `${key}: ${value}`)
-            .join(', ');
+        
+        const metrics = [];
+        if (toneMetrics.confidence !== undefined) metrics.push(`Confidence: ${toneMetrics.confidence.toFixed(2)}/10`);
+        if (toneMetrics.stress !== undefined) metrics.push(`Stress: ${toneMetrics.stress.toFixed(2)}/10`);
+        if (toneMetrics.engagement !== undefined) metrics.push(`Engagement: ${toneMetrics.engagement.toFixed(2)}/10`);
+        
+        return metrics.length > 0 ? metrics.join(', ') : 'No tone analysis available';
     }
 }
 
