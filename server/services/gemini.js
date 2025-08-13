@@ -1,91 +1,65 @@
 import axios from "axios";
 import dotenv from "dotenv";
+import {
+    DSA_SYSTEM_PROMPT,
+    GENERAL_SYSTEM_PROMPT,
+    INTERVIEW_ANALYSIS_PROMPT, 
+    quality_questions_prompt,
+    dsa_quality_questions_prompt,
+    buildCompanyContext,
+    buildResumeContext,
+    buildInterviewContext,
+    getInterviewTypeInstructions
+} from "../prompts";
 dotenv.config();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// Check if API key is available
 if (!GEMINI_API_KEY) {
     console.error("❌ GEMINI_API_KEY is not set in environment variables!");
     console.error("Please set your Google Gemini API key in a .env file:");
     console.error("GEMINI_API_KEY=your_api_key_here");
 }
 
-// Updated model endpoints - using current Gemini API models
-const GEMINI_MODELS = [
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent"
-];
+const GEMINI_MODEL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 
-let GEMINI_API_URL = GEMINI_MODELS[0]; // Start with the first model
-
-// Enhanced system prompt with strict JSON format requirement
-const systemPrompt = `You are an expert DSA interviewer. Analyze conversation history and ask focused questions.
-
-**RESPONSE FORMAT:**
-{
-  "question": "Your next question",
-  "feedback": {
-    "score": <0-50>,
-    "overallFeedback": "<feedback>",
-    "strengths": ["<strength>"],
-    "weaknesses": ["<weakness>"]
-  },
-  "shouldMoveToNextProblem": false,
-  "isWrapUp": false,
-  "currentStage": "<stage_name>",
-  "stageProgress": "<explanation>"
-}
-
-**DSA INTERVIEW STAGES:**
-1. Problem Intro - "What are your initial thoughts?"
-2. Approach Discussion - "How would you approach this?"
-3. Approach Refinement - Discuss optimization if needed
-4. Complexity Analysis - "What's the time/space complexity?"
-5. Edge Cases - "What edge cases should we consider?"
-6. Implementation - "Can you implement this?"
-7. Code Evaluation - Ask followup questions based on code
-8. Completion - Move to next problem when satisfied
-
-**FLAG RULES:**
-- Set shouldMoveToNextProblem: true ONLY when all stages complete OR they demonstrate good understanding
-- **CRITICAL:** Once you set shouldMoveToNextProblem: true, NEVER set it again for the same problem
-- **CRITICAL:** Only set this flag when you're 100% ready to move to the next problem
-
-**DSA PROBLEMS ARE PRE-LOADED** - don't try to "show" problems
-
-**ONLY JSON RESPONSE - NO THINKING TEXT**`;
-
-export const ask = async(prompt, companyInfo = null) => {
+export const ask = async(prompt, companyInfo = null, resumeData = null, interviewContext = null) => {
     // Check if API key is available
     if (!GEMINI_API_KEY) {
         throw new Error("Gemini API key is not configured. Please set GEMINI_API_KEY in your environment variables.");
     }
 
-    // Enhanced prompt with strict format requirements
+    // Determine which system prompt to use based on interview type
+    const interviewType = interviewContext?.interviewType?.toLowerCase() || 'general';
+    const isDSAInterview = interviewType === 'dsa';
+    
+    const systemPrompt = isDSAInterview ? DSA_SYSTEM_PROMPT : GENERAL_SYSTEM_PROMPT;
+    const qualityPrompt = isDSAInterview ? dsa_quality_questions_prompt : quality_questions_prompt;
+
+    // Build the complete prompt with all context
     let enhancedPrompt = prompt;
+    
+    // Add company context if available
     if (companyInfo) {
-        enhancedPrompt = `**Company Context: ${companyInfo.name} (${companyInfo.type})**
-**Role: ${companyInfo.role} (${companyInfo.level})**
-
-${prompt}
-
-**QUALITY INTERVIEW REQUIREMENTS:**
-- Follow the structured 8-stage problem flow for DSA interviews
-- **DSA PROBLEMS ARE PRE-LOADED** - don't try to "show" or "introduce" problems
-- Ask follow-up questions to dig deeper into responses
-- Ensure sufficient depth before moving to next problem
-- **SET shouldMoveToNextProblem: true IMMEDIATELY after completing the structured flow**
-- Make questions conversational and natural
-- Acknowledge previous responses before asking new questions
-- Adapt difficulty based on candidate performance
-- **EFFICIENCY:** Don't spend too long on a single problem - move through problems systematically
-- **STRUCTURED APPROACH:** Follow the defined stages: problem discussion → implementation → evaluation → next problem
-- **AGGRESSIVE MOVEMENT:** Don't hesitate - complete the flow and move on
-
-**REMEMBER**: Respond with ONLY JSON containing all required fields. NO thinking text, NO explanations.`;
+        enhancedPrompt = buildCompanyContext(companyInfo) + '\n\n' + enhancedPrompt;
     }
+    
+    // Add resume context only for non-DSA interviews
+    if (!isDSAInterview && resumeData) {
+        enhancedPrompt = buildResumeContext(resumeData) + '\n\n' + enhancedPrompt;
+    }
+    
+    // Add interview context if available
+    if (interviewContext) {
+        enhancedPrompt = buildInterviewContext(interviewContext) + '\n\n' + enhancedPrompt;
+    }
+    
+    // Add interview type specific instructions
+    const typeInstructions = getInterviewTypeInstructions(interviewType, resumeData);
+    enhancedPrompt = typeInstructions + '\n\n' + enhancedPrompt;
+    
+    // Add quality questions prompt
+    enhancedPrompt = enhancedPrompt + '\n\n' + qualityPrompt;
 
     const body = {
         contents: [
@@ -97,151 +71,75 @@ ${prompt}
             }
         ],
         generationConfig: {
-            temperature: 0.3, // Lower temperature for more consistent responses
+            temperature: 0.5, 
             topK: 20,
             topP: 0.8,
-            maxOutputTokens: 1024, // Reduced for cleaner responses
+            maxOutputTokens: 1024,
         }
     };
 
-    // Try different models if one fails
-    for (let i = 0; i < GEMINI_MODELS.length; i++) {
-        const currentUrl = GEMINI_MODELS[i];
-        console.log(`Trying Gemini API with model ${i + 1}/${GEMINI_MODELS.length}: ${currentUrl.split('/').pop()}`);
+    try {
+        console.log(`Sending request with ${body.contents[0].parts[0].text.length} characters`);
+        const response = await axios.post(`${GEMINI_MODEL}?key=${GEMINI_API_KEY}`, body, {
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            timeout: 45000
+        });
+        console.log("Received response");
+        
+        if (!response.data.candidates || !response.data.candidates[0]) {
+            throw new Error("Invalid response format from Gemini API");
+        }
+
+        const result = response.data.candidates[0].content.parts[0].text;
+
+        let question, feedback, shouldMoveToNextProblem, isWrapUp, currentStage, stageProgress;
         
         try {
-            const response = await axios.post(`${currentUrl}?key=${GEMINI_API_KEY}`, body, {
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                timeout: 45000
-            });
-
-            console.log("Gemini API response received successfully");
-            
-            if (!response.data.candidates || !response.data.candidates[0]) {
-                throw new Error("Invalid response format from Gemini API");
+            const jsonMatch = result.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                const jsonResponse = JSON.parse(jsonMatch[0]);
+                question = jsonResponse.question;
+                feedback = jsonResponse.feedback;
+                shouldMoveToNextProblem = jsonResponse.shouldMoveToNextProblem;
+                isWrapUp = jsonResponse.isWrapUp;
+                currentStage = jsonResponse.currentStage;
+                stageProgress = jsonResponse.stageProgress;
             }
-
-            const result = response.data.candidates[0].content.parts[0].text;
-            console.log("Result:", result);
-
-            // Enhanced JSON parsing with all required fields
-            let question, feedback, shouldMoveToNextProblem, isWrapUp, currentStage, stageProgress;
-            
-            try {
-                const jsonMatch = result.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    const jsonResponse = JSON.parse(jsonMatch[0]);
-                    console.log("JSON Response from AI:", jsonResponse);
-                    question = jsonResponse.question;
-                    feedback = jsonResponse.feedback;
-                    shouldMoveToNextProblem = jsonResponse.shouldMoveToNextProblem;
-                    isWrapUp = jsonResponse.isWrapUp;
-                    currentStage = jsonResponse.currentStage;
-                    stageProgress = jsonResponse.stageProgress;
-                }
-            } catch (jsonError) {
-                console.log('JSON parsing failed, using fallback');
-            }
-            
-            // Fallback: use the entire response as question
-            if (!question) {
-                question = cleanResponse(result);
-                feedback = {
-                    score: 25,
-                    overallFeedback: "Response parsed as question",
-                    strengths: ["Engaged"],
-                    weaknesses: ["Need more analysis"]
-                };
-            }
-
-            // Ensure feedback is an object with the correct structure
-            if (typeof feedback === 'string') {
-                feedback = {
-                    score: 25,
-                    overallFeedback: feedback,
-                    strengths: ["Engaged"],
-                    weaknesses: ["Need more analysis"]
-                };
-            }
-
-            return {
-                question: question ? question.trim() : "Please provide your response to continue the interview.",
-                feedback: feedback || {
-                    score: 25,
-                    overallFeedback: "No specific feedback for this round.",
-                    strengths: ["Engaged"],
-                    weaknesses: ["Need more analysis"]
-                },
-                shouldMoveToNextProblem: shouldMoveToNextProblem || false,
-                isWrapUp: isWrapUp || false,
-                currentStage: currentStage || "Analyzing",
-                stageProgress: stageProgress || "Continuing"
-            };
-        } catch (error) {
-            console.error(`Model ${i + 1} failed:`, error.message);
-            
-            if (i === GEMINI_MODELS.length - 1) {
-                if (error.response) {
-                    console.error("Response status:", error.response.status);
-                    console.error("Response data:", error.response.data);
-                    
-                    if (error.response.status === 404) {
-                        throw new Error("All Gemini API models failed. Please check your API key and ensure it's valid.");
-                    } else if (error.response.status === 403) {
-                        throw new Error("Access denied. Please check your API key permissions.");
-                    } else if (error.response.status === 400) {
-                        throw new Error("Bad request. Please check your prompt format.");
-                    }
-                } else if (error.request) {
-                    throw new Error("No response received from Gemini API. Please check your internet connection.");
-                } else {
-                    throw new Error(`Gemini API error: ${error.message}`);
-                }
-            }
-            continue;
+        } catch (jsonError) {
+            console.log('JSON parsing failed, using fallback');
         }
+     
+        // Ensure feedback is an object with the correct structure
+        if (typeof feedback === 'string') {
+            feedback = {
+                score: null,
+                overallFeedback: feedback,
+                strengths: ["No feedback received from AI"],
+                weaknesses: ["No feedback received from AI"]
+            };
+        }
+
+        return {
+            question: question ? question.trim() : "Please provide your response to continue the interview.",
+            feedback: feedback || {
+                score: null,
+                overallFeedback: "No specific feedback for this round.",
+                strengths: ["No feedback received from AI"],
+                weaknesses: ["No feedback received from AI"]
+            },
+            shouldMoveToNextProblem: shouldMoveToNextProblem,
+            isWrapUp: isWrapUp || false,
+            currentStage: currentStage,
+            stageProgress: stageProgress
+        };
+    } catch (error) {
+        console.error(`Gemini API failed:`, error.message);
+        throw new Error(`Some server side error occurred`);
     }
-}
+};
 
-// Helper function to clean responses
-function cleanResponse(text) {
-    if (!text) return "";
-    
-    // Remove common thinking patterns
-    const thinkingPatterns = [
-        /let me think about this/i,
-        /let me analyze/i,
-        /based on the context/i,
-        /considering the candidate/i,
-        /looking at their response/i,
-        /i would ask/i,
-        /my next question would be/i,
-        /the next question is/i,
-        /question:/i,
-        /next question:/i
-    ];
-    
-    let cleaned = text;
-    
-    // Apply thinking pattern removals
-    thinkingPatterns.forEach(pattern => {
-        cleaned = cleaned.replace(pattern, '');
-    });
-    
-    // Remove extra whitespace and normalize
-    cleaned = cleaned.replace(/\s+/g, ' ').trim();
-    
-    // Remove JSON formatting if present
-    cleaned = cleaned.replace(/```json\s*/g, '').replace(/```\s*/g, '');
-    
-    return cleaned;
-}
-
-/**
- * Generate comprehensive interview analysis and feedback
- */
 export const generateInterviewAnalysis = async (interviewData, companyInfo = null) => {
     if (!GEMINI_API_KEY) {
         throw new Error("Gemini API key is not configured.");
@@ -290,37 +188,7 @@ ${userResponses.map((response, index) =>
 **Tone Analysis Summary:**
 ${toneSummary}
 
-**Your Task: Generate a comprehensive interview summary with the following sections:**
-
-**1. Overall Performance Assessment**
-Evaluate their overall performance across all questions. Consider technical knowledge, communication skills, and problem-solving approach. Provide a balanced assessment of strengths and areas for improvement.
-
-**2. Technical Skills Evaluation**
-Assess their technical knowledge and problem-solving abilities. Evaluate their approach to technical questions and comment on their coding/algorithmic thinking.
-
-**3. Communication Skills Assessment**
-Evaluate their verbal communication clarity, ability to explain complex concepts, and consider their tone analysis metrics (confidence, stress, engagement, etc.).
-
-**4. Behavioral Competencies**
-Evaluate their responses to behavioral questions, assess their teamwork, leadership, and problem-solving examples, and consider their cultural fit potential.
-
-**5. Specific Strengths**
-- List 3-5 specific strengths demonstrated during the interview
-- Be specific and reference their actual responses
-
-**6. Areas for Improvement**
-- List 3-5 specific areas where they could improve
-- Provide constructive feedback with actionable suggestions
-
-**7. Recommendations**
-Provide specific recommendations for improvement, suggest resources or practice areas, and give actionable next steps.
-
-**8. Overall Rating**
-Provide an overall rating (1-10 scale) with detailed explanation considering all aspects: technical skills, communication, problem-solving, etc.
-
-**Format the response as a professional interview feedback report suitable for HR and hiring managers. Use clear section headers and bullet points where appropriate.**
-
-**Important:** Be thorough, specific, and constructive. Reference their actual responses and tone analysis data in your assessment.`;
+${INTERVIEW_ANALYSIS_PROMPT}`;
 
     const body = {
         contents: [
@@ -332,35 +200,29 @@ Provide an overall rating (1-10 scale) with detailed explanation considering all
             }
         ],
         generationConfig: {
-            temperature: 0.2,
+            temperature: 0.5,
             topK: 20,
             topP: 0.8,
             maxOutputTokens: 2048,
         }
     };
 
-    for (let i = 0; i < GEMINI_MODELS.length; i++) {
-        const currentUrl = GEMINI_MODELS[i];
-        
-        try {
-            const response = await axios.post(`${currentUrl}?key=${GEMINI_API_KEY}`, body, {
-                headers: { 'Content-Type': 'application/json' },
-                timeout: 60000
-            });
+    try {
+        console.log(`Sending request with ${body.contents[0].parts[0].text.length} characters`);
+        const response = await axios.post(`${GEMINI_MODEL}?key=${GEMINI_API_KEY}`, body, {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 60000
+        });
+        console.log("Received response");
 
-            if (!response.data.candidates || !response.data.candidates[0]) {
-                throw new Error("Invalid response format from Gemini API");
-            }
-
-            return response.data.candidates[0].content.parts[0].text.trim();
-
-        } catch (error) {
-            console.error(`Model ${i + 1} failed for interview analysis:`, error.message);
-            
-            if (i === GEMINI_MODELS.length - 1) {
-                throw new Error(`Interview analysis generation failed: ${error.message}`);
-            }
-            continue;
+        if (!response.data.candidates || !response.data.candidates[0]) {
+            throw new Error("Invalid response format from Gemini API");
         }
+
+        return response.data.candidates[0].content.parts[0].text.trim();
+
+    } catch (error) {
+        console.error(`Gemini API failed for interview analysis:`, error.message);
+        throw new Error(`Some server side error occurred`);
     }
 };

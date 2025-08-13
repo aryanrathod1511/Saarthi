@@ -2,3 +2,4 @@
 node_modules
 README.md
 server/data
+server/prompts.js

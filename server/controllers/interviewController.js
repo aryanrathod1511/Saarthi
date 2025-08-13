@@ -311,7 +311,7 @@ export const startInterview = async (req, res) => {
             }
         }
 
-        // Generate welcome message using the new flow service
+        
         const welcomeResponse = await interviewFlowService.generateWelcomeMessage(promptEngineer);
 
         // Update context
@@ -667,7 +667,7 @@ export const terminateSession = async (req, res) => {
   }
 };
 
-// Add these new methods for the routes:
+
 
 // Get user's interview history
 export const getInterviewHistory = async (req, res) => {
