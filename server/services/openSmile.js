@@ -19,16 +19,13 @@ export const analyzeTone = async (audioFilePath) => {
     const opensmileDir = path.dirname(opensmilePath);
     const configPath = path.join(opensmileDir, 'config', 'emobase', 'emobase.conf');
 
-    console.log(configPath);
+
     if (!fs.existsSync(configPath)) {
       console.log('Config file not found');
     }
 
     const outputPath = audioFilePath.replace(/\.[^/.]+$/, '_features.csv');
 
-    console.log('OpenSMILE path:', opensmilePath);
-    console.log('Config path:', configPath);
-    console.log('Audio file path:', audioFilePath);
 
     if (!fs.existsSync(opensmilePath)) {
       console.warn('OpenSMILE executable not found at:', opensmilePath);
@@ -39,15 +36,14 @@ export const analyzeTone = async (audioFilePath) => {
       console.warn('OpenSMILE config not found at:', configPath);
       return await fallbackToneAnalysis(audioFilePath);
     }
-    console.log("all files are found");
+  
     const command = `"${opensmilePath}" -C "${configPath}" -I "${audioFilePath}" -O "${outputPath}" -l 0 -nologfile 1`;
-    console.log('Running OpenSMILE command:', command);
+  
 
     try {
       const { stdout, stderr } = await execAsync(command, { timeout: 30000 });
 
-      if (stderr) console.warn('stderr:', stderr);
-      if (stdout) console.log('stdout:', stdout);
+    
 
       if (!fs.existsSync(outputPath)) {
         throw new Error('OpenSMILE failed to generate output');

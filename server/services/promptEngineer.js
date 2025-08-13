@@ -53,6 +53,11 @@ export class PromptEngineer {
         if(newContext.transcript) this.interviewContext.candidateResponses.push(newContext.transcript);
         if(newContext.toneMetrics) this.interviewContext.toneAnalysis.push(newContext.toneMetrics);
         this.interviewContext.currentTime = new Date().getTime();
+        
+        // Track evaluation question count
+        if (newContext.isEvaluationQuestion) {
+            this.trackEvaluationQuestion(newContext.currentProblem);
+        }
     }
 
     detectExperienceLevel(resumeText) {
@@ -80,5 +85,15 @@ export class PromptEngineer {
         
         // Default to entry level
         return 'Entry';
+    }
+
+    trackEvaluationQuestion(problem) {
+        if (!this.interviewContext.evaluationQuestions) {
+            this.interviewContext.evaluationQuestions = {};
+        }
+        
+        const problemKey = `${problem.title}_${this.interviewContext.currentProblemIndex}`;
+        const currentCount = this.interviewContext.evaluationQuestions[problemKey] || 0;
+        this.interviewContext.evaluationQuestions[problemKey] = currentCount + 1;
     }
 } 

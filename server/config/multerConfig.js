@@ -79,7 +79,7 @@ export const audioUpload = multer({
     storage: audioStorage,
     fileFilter: audioFileFilter,
     limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB limit
+        fileSize: 5 * 1024 * 1024, // 5MB limit
         files: 1 // Only one file at a time
     }
 });

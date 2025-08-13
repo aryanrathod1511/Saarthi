@@ -1,5 +1,5 @@
 import {ask} from './gemini.js';
-import { getDSAProblemIntroduction } from '../prompts.js';
+import { getDSAProblemIntroduction, CODE_EVALUATION_DISCUSSION_PROMPT } from '../prompts.js';
 
 
 class InterviewFlowService {
@@ -58,12 +58,17 @@ Keep the introduction concise (2-3 minutes).`;
     async generateNextQuestion(promptEngineer, context = {}) {
         const { interviewType } = promptEngineer.interviewContext;
         const { name, role } = promptEngineer.companyInfo;
-        const { transcript, elapsedMinutes, currentProblem, lastEvaluation } = context;
+        const { transcript, elapsedMinutes, currentProblem, lastEvaluation, isCodeEvaluationDiscussion } = context;
         const candidateName = promptEngineer.resumeData?.name || 'the candidate';
         const config = this.getInterviewConfig(interviewType);
 
         if (this.shouldWrapUp(interviewType, elapsedMinutes)) {
             return await this.generateWrapUpQuestion(promptEngineer, context);
+        }
+
+        // Handle code evaluation discussion
+        if (isCodeEvaluationDiscussion && lastEvaluation) {
+            return await this.generateCodeEvaluationDiscussion(promptEngineer, context);
         }
 
         const problemChanged = context.problemChanged || false;
@@ -129,6 +134,72 @@ ${conversationHistory}
                 isWrapUp: aiResponse.isWrapUp || false,
                 currentStage: aiResponse.currentStage || "Analyzing",
                 stageProgress: aiResponse.stageProgress || "Continuing"
+            };
+        }
+        
+        return this.cleanAIResponse(aiResponse);
+    }
+
+    // Enhanced code evaluation discussion with question tracking
+    async generateCodeEvaluationDiscussion(promptEngineer, context) {
+        const { lastEvaluation, currentProblem } = context;
+        const { name, role } = promptEngineer.companyInfo;
+        const candidateName = promptEngineer.resumeData?.name || 'the candidate';
+
+        // Track how many follow-up questions have been asked for this code evaluation
+        const evaluationQuestionCount = this.getEvaluationQuestionCount(promptEngineer, currentProblem);
+        const maxQuestions = this.getMaxQuestionsForScore(lastEvaluation.score);
+        
+        // Determine if this should be the final question
+        const isFinalQuestion = evaluationQuestionCount >= maxQuestions - 1;
+
+        // Build the discussion prompt with evaluation results
+        let discussionPrompt = CODE_EVALUATION_DISCUSSION_PROMPT
+            .replace('{score}', lastEvaluation.score)
+            .replace('{overallFeedback}', lastEvaluation.overallFeedback)
+            .replace('{strengths}', JSON.stringify(lastEvaluation.strengths))
+            .replace('{weaknesses}', JSON.stringify(lastEvaluation.weaknesses));
+
+        // Add question count context
+        discussionPrompt += `
+
+**QUESTION COUNT CONTEXT:**
+- Follow-up questions asked so far: ${evaluationQuestionCount}
+- Maximum questions for this score: ${maxQuestions}
+- This is ${isFinalQuestion ? 'the FINAL' : 'a follow-up'} question for this code evaluation
+- ${isFinalQuestion ? 'SET shouldMoveToNextProblem: true' : 'Continue with follow-up questions'}`;
+
+        const fullPrompt = `**CODE EVALUATION DISCUSSION**
+
+**Context:** ${name} | ${role} | ${candidateName}
+**Problem:** ${currentProblem?.title || 'Current Problem'}
+
+${discussionPrompt}
+
+**Additional Context:**
+- This is a DSA interview with 4 problems total
+- Current problem: ${promptEngineer.interviewContext.currentProblemIndex + 1}/4
+- Previous conversation: ${this.buildConversationHistory(promptEngineer)}
+
+**Your Task:**
+- Discuss the code evaluation results naturally
+- Ask follow-up questions based on the evaluation
+- Provide constructive feedback
+- ${isFinalQuestion ? 'This is the FINAL question - SET shouldMoveToNextProblem: true' : 'Continue with follow-up questions'}`;
+
+        const aiResponse = await ask(fullPrompt, promptEngineer.companyInfo, promptEngineer.resumeData, promptEngineer.interviewContext);
+        
+        if (aiResponse && typeof aiResponse === 'object' && aiResponse.question) {
+            // Track this question in the context
+            this.trackEvaluationQuestion(promptEngineer, currentProblem);
+            
+            return {
+                question: aiResponse.question,
+                feedback: aiResponse.feedback || this.generateDefaultFeedback(),
+                shouldMoveToNextProblem: aiResponse.shouldMoveToNextProblem || isFinalQuestion,
+                isWrapUp: aiResponse.isWrapUp || false,
+                currentStage: aiResponse.currentStage || "code_evaluation_discussion",
+                stageProgress: aiResponse.stageProgress || "Discussing code evaluation"
             };
         }
         
@@ -241,6 +312,34 @@ A: ${entry.answer || 'No response'}`;
         if (toneMetrics.engagement !== undefined) metrics.push(`Engagement: ${toneMetrics.engagement.toFixed(2)}/10`);
         
         return metrics.length > 0 ? metrics.join(', ') : 'No tone analysis available';
+    }
+
+    // Helper method to get maximum questions based on score
+    getMaxQuestionsForScore(score) {
+        if (score >= 35) return 3; // High score: 1-2 questions
+        if (score >= 20) return 4; // Medium score: 2-3 questions
+        return 3; // Low score: 2-3 questions with guidance
+    }
+
+    // Helper method to track evaluation questions
+    getEvaluationQuestionCount(promptEngineer, currentProblem) {
+        if (!promptEngineer.interviewContext.evaluationQuestions) {
+            promptEngineer.interviewContext.evaluationQuestions = {};
+        }
+        
+        const problemKey = `${currentProblem.title}_${promptEngineer.interviewContext.currentProblemIndex}`;
+        return promptEngineer.interviewContext.evaluationQuestions[problemKey] || 0;
+    }
+
+    // Helper method to track evaluation questions
+    trackEvaluationQuestion(promptEngineer, currentProblem) {
+        if (!promptEngineer.interviewContext.evaluationQuestions) {
+            promptEngineer.interviewContext.evaluationQuestions = {};
+        }
+        
+        const problemKey = `${currentProblem.title}_${promptEngineer.interviewContext.currentProblemIndex}`;
+        const currentCount = promptEngineer.interviewContext.evaluationQuestions[problemKey] || 0;
+        promptEngineer.interviewContext.evaluationQuestions[problemKey] = currentCount + 1;
     }
 }
 

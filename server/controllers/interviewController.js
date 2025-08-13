@@ -517,59 +517,53 @@ export const submitCode = async (req, res) => {
             timestamp: new Date()
         });
         
-        // Determine next action based on score
-        const nextAction = codeEvaluationService.determineNextAction(evaluation.score);
-        
-        // Get the DSA problem context
-        const dsaProblemContext = `DSA Problem: ${currentProblem.title} - ${currentProblem.description}`;
-        
-        // Generate next question using flow service with evaluation context
+        // Generate code evaluation discussion question
         const context = {
             transcript: `Code submitted for problem: ${currentProblem.title}`,
             toneMetrics: {},
             elapsedMinutes: Math.floor((new Date() - promptEngineer.interviewContext.startTime) / (1000 * 60)),
             currentProblem: currentProblem,
-            dsaProblemContext: dsaProblemContext,
-            lastEvaluation: evaluation
+            lastEvaluation: evaluation,
+            isCodeEvaluationDiscussion: true // Flag to trigger discussion
         };
 
-        const nextQuestionResponse = await interviewFlowService.generateNextQuestion(promptEngineer, context);
+        const discussionResponse = await interviewFlowService.generateCodeEvaluationDiscussion(promptEngineer, context);
 
-        // Update context with the new question
+        // Validate that the AI set the flag appropriately
+        const evaluationQuestionCount = interviewFlowService.getEvaluationQuestionCount(promptEngineer, currentProblem);
+        const maxQuestions = interviewFlowService.getMaxQuestionsForScore(evaluation.score);
+        
+        // Force flag if AI didn't set it but should have
+        if (evaluationQuestionCount >= maxQuestions && !discussionResponse.shouldMoveToNextProblem) {
+            console.log('Forcing shouldMoveToNextProblem flag - question limit reached');
+            discussionResponse.shouldMoveToNextProblem = true;
+        }
+
+        // Update context with the discussion question
         promptEngineer.updateContext({
             currentRound: (promptEngineer.interviewContext.questionHistory.length + 1),
-            currentQuestion: nextQuestionResponse.question,
+            currentQuestion: discussionResponse.question,
             transcript: `Code submitted for problem: ${currentProblem.title}`,
             toneMetrics: {}
         });
-
-        // Handle shouldMoveToNextProblem flag
-        if (nextQuestionResponse.shouldMoveToNextProblem) {
-            const currentIndex = promptEngineer.interviewContext.currentProblemIndex || 0;
-            const dsaProblems = promptEngineer.interviewContext.dsaProblems;
-            
-            if (dsaProblems && currentIndex < dsaProblems.length - 1) {
-                promptEngineer.interviewContext.currentProblemIndex = currentIndex + 1;
-            }
-        }
 
         res.status(200).json({
             evaluation: {
                 score: evaluation.score,
                 overallFeedback: evaluation.overallFeedback,
                 strengths: evaluation.strengths,
-                weaknesses: evaluation.weaknesses,
-                nextAction: nextAction
+                weaknesses: evaluation.weaknesses
             },
-            nextQuestion: nextQuestionResponse.question,
+            nextQuestion: discussionResponse.question,
             currentProblem: currentProblem,
             currentIndex: currentIndex,
             totalProblems: dsaProblems.length,
             isLastProblem: currentIndex === dsaProblems.length - 1,
             round: promptEngineer.interviewContext.questionHistory.length,
-            shouldMoveToNextProblem: nextQuestionResponse.shouldMoveToNextProblem,
-            isWrapUp: nextQuestionResponse.isWrapUp,
-            currentStage: nextQuestionResponse.currentStage
+            shouldMoveToNextProblem: discussionResponse.shouldMoveToNextProblem,
+            isWrapUp: discussionResponse.isWrapUp,
+            currentStage: discussionResponse.currentStage,
+            isCodeEvaluationDiscussion: true
         });
 
     } catch (error) {
