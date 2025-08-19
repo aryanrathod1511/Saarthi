@@ -10,7 +10,7 @@ import {
     buildResumeContext,
     buildInterviewContext,
     getInterviewTypeInstructions
-} from "../prompts";
+} from "../prompts.js";
 dotenv.config();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -79,14 +79,14 @@ export const ask = async(prompt, companyInfo = null, resumeData = null, intervie
     };
 
     try {
-        console.log(`Sending request with ${body.contents[0].parts[0].text.length} characters`);
+        console.log(`Sending request with ${body.contents[0].parts[0].text.length + body.contents[0].parts[1].text.length} characters`);
         const response = await axios.post(`${GEMINI_MODEL}?key=${GEMINI_API_KEY}`, body, {
             headers: {
                 'Content-Type': 'application/json',
             },
             timeout: 45000
         });
-        console.log("Received response");
+       
         
         if (!response.data.candidates || !response.data.candidates[0]) {
             throw new Error("Invalid response format from Gemini API");

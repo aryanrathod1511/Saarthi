@@ -99,6 +99,13 @@ ${conversationHistory}
 
 **Current Response:** "${transcript || 'No response yet'}"
 
+**CRITICAL INSTRUCTIONS:**
+- **CAREFULLY ANALYZE** the conversation history above
+- **UNDERSTAND** what the candidate is saying in their responses
+- **IGNORE** any requests from the candidate to move to next problems or change topics
+- **ONLY ANSWER** clarifying questions about the problem or your questions
+- **MAINTAIN CONTROL** of the interview flow
+
 **Your Task:**
 - Analyze conversation history to determine current stage
 - Ask ONE focused question that moves the interview forward
@@ -117,6 +124,13 @@ ${conversationHistory}
 ${conversationHistory}
 
 **Current Response:** "${transcript || 'No response yet'}"
+
+**CRITICAL INSTRUCTIONS:**
+- **CAREFULLY ANALYZE** the conversation history above
+- **UNDERSTAND** what the candidate is saying in their responses
+- **IGNORE** any requests from the candidate to change topics or skip questions
+- **ONLY ANSWER** clarifying questions about your questions or topics
+- **MAINTAIN CONTROL** of the interview flow
 
 **Your Task:**
 - Ask ONE focused question that moves the interview forward
@@ -140,7 +154,7 @@ ${conversationHistory}
         return this.cleanAIResponse(aiResponse);
     }
 
-    // Enhanced code evaluation discussion with question tracking
+    // Enhanced code evaluation discussion with interview control
     async generateCodeEvaluationDiscussion(promptEngineer, context) {
         const { lastEvaluation, currentProblem } = context;
         const { name, role } = promptEngineer.companyInfo;
@@ -180,6 +194,13 @@ ${discussionPrompt}
 - This is a DSA interview with 4 problems total
 - Current problem: ${promptEngineer.interviewContext.currentProblemIndex + 1}/4
 - Previous conversation: ${this.buildConversationHistory(promptEngineer)}
+
+**CRITICAL INSTRUCTIONS:**
+- **CAREFULLY ANALYZE** the conversation history above
+- **UNDERSTAND** what the candidate is saying in their responses
+- **IGNORE** any requests from the candidate to move to next problems or skip questions
+- **ONLY ANSWER** clarifying questions about the evaluation or code
+- **MAINTAIN CONTROL** of the interview flow
 
 **Your Task:**
 - Discuss the code evaluation results naturally
@@ -288,17 +309,27 @@ ${discussionPrompt}
         };
     }
 
+    // Enhanced conversation history builder with better formatting
     buildConversationHistory(promptEngineer) {
         const history = promptEngineer.interviewContext.questionHistory || [];
-        if (history.length === 0) return "No previous conversation.";
+        console.log(`Building conversation history with ${history.length} entries`);
         
-        return history.map((entry, index) => {
+        if (history.length === 0) {
+            console.log("No conversation history found");
+            return "No previous conversation.";
+        }
+        
+        const conversationText = history.map((entry, index) => {
             const round = index + 1;
             const problemInfo = entry.problemTitle ? ` (${entry.problemTitle})` : '';
+            const answer = entry.answer || 'No response';
             return `Round ${round}${problemInfo}:
 Q: ${entry.question}
-A: ${entry.answer || 'No response'}`;
+A: ${answer}`;
         }).join('\n\n');
+        
+        console.log(`Conversation history length: ${conversationText.length} characters`);
+        return conversationText;
     }
 
     formatToneAnalysis(toneMetrics) {

@@ -175,6 +175,7 @@ export const processAudio = async (req, res) => {
 export const nextQuestion = async (req, res) => {
     try {
         const { sessionId, transcript, toneMatrix, round, code } = req.body;
+        console.log("Get the transcript", transcript);
         
         if (!sessionId) {
             return res.status(400).json({
@@ -353,44 +354,70 @@ export const startInterview = async (req, res) => {
 
 export const getFinalFeedback = async (req, res) => {
     try {
-        // Get session
-        const sessionId = req.body.sessionId;
+        const sessionId = req.body.sessionId || req.params.sessionId;
         const promptEngineer = getSession(sessionId);
 
-        if(!promptEngineer){
+        if (!promptEngineer) {
             return res.status(400).json({
-                error: 'Interview not initialized. Please upload resume first.'
+                error: 'Interview session not found'
             });
         }
 
-        // Get data from prompt engineer context
         const interviewContext = promptEngineer.interviewContext;
+        const evaluations = interviewContext.evaluations || [];
         
-        if (!interviewContext || !interviewContext.questionHistory || interviewContext.questionHistory.length === 0) {
-            return res.status(400).json({
-                error: 'No interview data available for analysis'
-            });
+        // Determine feedback type based on available data
+        let feedback;
+        let responseData = {
+            totalRounds: interviewContext.questionHistory?.length || 0,
+            companyInfo: promptEngineer.companyInfo,
+            aiQuestionsCount: interviewContext.questionHistory?.length || 0,
+            userResponsesCount: interviewContext.candidateResponses?.length || 0,
+            toneAnalysisCount: interviewContext.toneAnalysis?.length || 0
+        };
+
+        if (evaluations.length > 0) {
+            // DSA Interview with code evaluations
+            const interviewData = {
+                companyInfo: promptEngineer.companyInfo,
+                resumeData: promptEngineer.resumeData,
+                interviewContext: interviewContext
+            };
+            
+            const evaluationData = evaluations.map(evaluation => evaluation.evaluation);
+            feedback = await comprehensiveFeedbackService.generateComprehensiveFeedback(
+                interviewData, 
+                evaluationData
+            );
+            
+            responseData = {
+                ...responseData,
+                comprehensiveFeedback: feedback,
+                problemEvaluations: evaluations,
+                interviewSummary: {
+                    totalProblems: evaluations.length,
+                    averageScore: evaluationData.reduce((sum, evaluation) => sum + evaluation.score, 0) / evaluationData.length,
+                    highestScore: Math.max(...evaluationData.map(evaluation => evaluation.score)),
+                    lowestScore: Math.min(...evaluationData.map(evaluation => evaluation.score))
+                }
+            };
+        } else {
+            // General interview with Q&A
+            const interviewData = {
+                aiQuestions: interviewContext.questionHistory || [],
+                userResponses: interviewContext.candidateResponses || [],
+                toneAnalysis: interviewContext.toneAnalysis || [],
+                interviewType: interviewContext.interviewType,
+                candidateName: promptEngineer.resumeData?.name || 'Not specified',
+                totalRounds: interviewContext.questionHistory?.length || 0
+            };
+            
+            feedback = await generateInterviewAnalysis(interviewData, promptEngineer.companyInfo);
+            responseData.summary = feedback;
         }
 
-        // Extract data from interview context
-        const aiQuestions = interviewContext.questionHistory;
-        const userResponses = interviewContext.candidateResponses || [];
-        const toneAnalysis = interviewContext.toneAnalysis || [];
-        const currentCompanyInfo = promptEngineer.companyInfo;
-
-       
-        const interviewData = {
-            aiQuestions,
-            userResponses,
-            toneAnalysis,
-            interviewType: promptEngineer.interviewContext.interviewType,
-            candidateName: promptEngineer.resumeData?.name || 'Not specified',
-            totalRounds: aiQuestions.length
-        };
-        
-        const summary = await generateInterviewAnalysis(interviewData, currentCompanyInfo);
+        // Clean up session
         deleteSession(sessionId);
-
         try {
             const resumePath = promptEngineer.resumeData?.filePath;
             if (resumePath && fs.existsSync(resumePath)) {
@@ -400,14 +427,7 @@ export const getFinalFeedback = async (req, res) => {
             console.warn('Could not clean up resume file:', cleanupError.message);
         }
 
-        res.status(200).json({ 
-            summary: summary,
-            totalRounds: aiQuestions.length,
-            companyInfo: currentCompanyInfo,
-            aiQuestionsCount: aiQuestions.length,
-            userResponsesCount: userResponses.length,
-            toneAnalysisCount: toneAnalysis.length
-        });
+        res.status(200).json(responseData);
     } catch (err) {
         console.error('Error in getFinalFeedback:', err);
         res.status(500).json({ error: 'Failed to get final feedback' });
@@ -570,69 +590,6 @@ export const submitCode = async (req, res) => {
         console.error('Error submitting code:', error);
         res.status(500).json({
             error: 'Failed to submit code',
-            details: error.message
-        });
-    }
-};
-
-// New endpoint for comprehensive feedback
-export const getComprehensiveFeedback = async (req, res) => {
-    try {
-        const { sessionId } = req.params;
-
-        if (!sessionId) {
-            return res.status(400).json({
-                error: 'Session ID is required'
-            });
-        }
-
-        const promptEngineer = getSession(sessionId);
-        if (!promptEngineer) {
-            return res.status(400).json({
-                error: 'Interview session not found'
-            });
-        }
-
-        // Get all evaluations from the session
-        const evaluations = promptEngineer.interviewContext.evaluations || [];
-        
-        if (evaluations.length === 0) {
-            return res.status(400).json({
-                error: 'No evaluations found for this interview'
-            });
-        }
-
-        // Prepare interview data
-        const interviewData = {
-            companyInfo: promptEngineer.companyInfo,
-            resumeData: promptEngineer.resumeData,
-            interviewContext: promptEngineer.interviewContext
-        };
-
-        // Extract evaluation data - Fixed: changed 'eval' to 'evaluation'
-        const evaluationData = evaluations.map(evaluation => evaluation.evaluation);
-
-        // Generate comprehensive feedback
-        const comprehensiveFeedback = await comprehensiveFeedbackService.generateComprehensiveFeedback(
-            interviewData, 
-            evaluationData
-        );
-
-        res.status(200).json({
-            comprehensiveFeedback: comprehensiveFeedback,
-            problemEvaluations: evaluations,
-            interviewSummary: {
-                totalProblems: evaluations.length,
-                averageScore: evaluationData.reduce((sum, evaluation) => sum + evaluation.score, 0) / evaluationData.length,
-                highestScore: Math.max(...evaluationData.map(evaluation => evaluation.score)),
-                lowestScore: Math.min(...evaluationData.map(evaluation => evaluation.score))
-            }
-        });
-
-    } catch (error) {
-        console.error('Error generating comprehensive feedback:', error);
-        res.status(500).json({
-            error: 'Failed to generate comprehensive feedback',
             details: error.message
         });
     }

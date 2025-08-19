@@ -5,7 +5,6 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const ASSEMBLY_AI_API_KEY = process.env.ASSEMBLY_AI_API_KEY;
-console.log(ASSEMBLY_AI_API_KEY);
 const ASSEMBLY_AI_BASE_URL = "https://api.assemblyai.com/v2";
 
 const CONFIG = {

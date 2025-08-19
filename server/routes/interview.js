@@ -20,7 +20,7 @@ router.post("/upload-resume", interviewController.uploadResume);
 router.post("/start-interview", interviewController.startInterview);
 router.post("/next-question", interviewController.nextQuestion);
 router.post("/submit-code", interviewController.submitCode);
-router.post("/get-final-feedback", interviewController.getFinalFeedback);
+router.all("/get-final-feedback", interviewController.getFinalFeedback);
 router.post("/terminate-session", interviewController.terminateSession);
 
 // Audio processing route - Use audioUpload instead of upload
