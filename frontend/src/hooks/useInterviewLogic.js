@@ -211,14 +211,14 @@ export const useInterviewLogic = (isOngoing = false, sessionIdFromProps = null) 
       console.log(' Starting interview finish process...');
       
       if (!sessionId) {
-        console.error('❌ No active session found');
+        console.error('No active session found');
         if (window.toast) {
           window.toast.error('No active session found.');
         }
         return;
       }
 
-      console.log('📊 Generating detailed interview summary...');
+      console.log(' Generating detailed interview summary...');
       if (window.toast) {
         window.toast.info('Generating detailed interview summary...', 0);
       }
@@ -226,7 +226,7 @@ export const useInterviewLogic = (isOngoing = false, sessionIdFromProps = null) 
       const response = await interviewService.getSummary(sessionId);
       
       if (response.summary) {
-        console.log('✅ Summary generated successfully:', {
+        console.log(' Summary generated successfully:', {
           summaryLength: response.summary.length,
           totalRounds: response.totalRounds,
           companyInfo: response.companyInfo
@@ -241,15 +241,15 @@ export const useInterviewLogic = (isOngoing = false, sessionIdFromProps = null) 
         setShowSummary(true);
         setSessionId(null);
         
-        console.log('🎉 Summary modal should now be visible');
+        console.log('Summary modal should now be visible');
       } else {
-        console.error('❌ No summary in response');
+        console.error(' No summary in response');
         if (window.toast) {
           window.toast.error('Failed to generate summary');
         }
       }
     } catch (error) {
-      console.error('❌ Error getting feedback:', error);
+      console.error(' Error getting feedback:', error);
       if (window.toast) {
         window.toast.error(error.response?.data?.error || 'Failed to get interview feedback');
       }
@@ -299,7 +299,7 @@ export const useInterviewLogic = (isOngoing = false, sessionIdFromProps = null) 
 
   // Summary handlers
   const handleCloseSummary = () => {
-    console.log('🔒 Closing summary modal');
+    console.log(' Closing summary modal');
     setShowSummary(false);
     setSummaryData(null); // Clear summary data when closing
   };
@@ -307,9 +307,9 @@ export const useInterviewLogic = (isOngoing = false, sessionIdFromProps = null) 
   // Monitor summary state changes
   useEffect(() => {
     if (showSummary) {
-      console.log('📋 Summary modal is now open');
+      console.log(' Summary modal is now open');
     } else if (summaryData) {
-      console.log('📋 Summary modal is now closed');
+      console.log(' Summary modal is now closed');
     }
   }, [showSummary, summaryData]);
 

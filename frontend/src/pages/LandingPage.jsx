@@ -37,10 +37,10 @@ const LandingPage = () => {
             
             <div className="flex items-center justify-center mb-6">
               <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center mr-4">
-                <span className="text-white font-bold text-2xl">S</span>
+                <span className="text-white font-bold text-2xl">P</span>
               </div>
               <h1 className="text-5xl md:text-7xl font-bold text-gray-900 leading-tight">
-                Saarthi
+                PrepForge
               </h1>
             </div>
             

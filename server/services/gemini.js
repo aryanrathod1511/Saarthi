@@ -1,27 +1,24 @@
 import axios from "axios";
 import dotenv from "dotenv";
 import {
-    DSA_SYSTEM_PROMPT,
     GENERAL_SYSTEM_PROMPT,
-    INTERVIEW_ANALYSIS_PROMPT, 
+    INTERVIEW_ANALYSIS_PROMPT,
     quality_questions_prompt,
-    dsa_quality_questions_prompt,
     buildCompanyContext,
     buildResumeContext,
     buildInterviewContext,
-    getInterviewTypeInstructions
+    getInterviewTypeInstructions,
+    DSA_STAGE_SYSTEM_PROMPT,
 } from "../prompts.js";
 dotenv.config();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 if (!GEMINI_API_KEY) {
-    console.error("❌ GEMINI_API_KEY is not set in environment variables!");
-    console.error("Please set your Google Gemini API key in a .env file:");
-    console.error("GEMINI_API_KEY=your_api_key_here");
+    console.error("GEMINI_API_KEY is not set in environment variables!");
 }
 
-const GEMINI_MODEL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const GEMINI_MODEL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent";
 
 export const ask = async(prompt, companyInfo = null, resumeData = null, interviewContext = null) => {
     // Check if API key is available
@@ -29,44 +26,36 @@ export const ask = async(prompt, companyInfo = null, resumeData = null, intervie
         throw new Error("Gemini API key is not configured. Please set GEMINI_API_KEY in your environment variables.");
     }
 
-    // Determine which system prompt to use based on interview type
+    // ask() is only called for non-DSA interviews. DSA uses askDSA() instead.
     const interviewType = interviewContext?.interviewType?.toLowerCase() || 'general';
-    const isDSAInterview = interviewType === 'dsa';
-    
-    const systemPrompt = isDSAInterview ? DSA_SYSTEM_PROMPT : GENERAL_SYSTEM_PROMPT;
-    const qualityPrompt = isDSAInterview ? dsa_quality_questions_prompt : quality_questions_prompt;
 
     // Build the complete prompt with all context
     let enhancedPrompt = prompt;
-    
-    // Add company context if available
+
     if (companyInfo) {
         enhancedPrompt = buildCompanyContext(companyInfo) + '\n\n' + enhancedPrompt;
     }
-    
-    // Add resume context only for non-DSA interviews
-    if (!isDSAInterview && resumeData) {
+
+    if (resumeData) {
         enhancedPrompt = buildResumeContext(resumeData) + '\n\n' + enhancedPrompt;
     }
-    
-    // Add interview context if available
+
     if (interviewContext) {
         enhancedPrompt = buildInterviewContext(interviewContext) + '\n\n' + enhancedPrompt;
     }
-    
-    // Add interview type specific instructions
-    const typeInstructions = getInterviewTypeInstructions(interviewType, resumeData);
+
+    const typeInstructions = getInterviewTypeInstructions(interviewType);
     enhancedPrompt = typeInstructions + '\n\n' + enhancedPrompt;
-    
-    // Add quality questions prompt
-    enhancedPrompt = enhancedPrompt + '\n\n' + qualityPrompt;
+
+    enhancedPrompt = enhancedPrompt + '\n\n' + quality_questions_prompt;
 
     const body = {
         contents: [
             {
+                role: "user", 
                 parts: [
-                    { text: systemPrompt },
-                    { text: enhancedPrompt }
+                    { text: GENERAL_SYSTEM_PROMPT + "\n" + enhancedPrompt },
+                    
                 ]
             }
         ],
@@ -79,7 +68,7 @@ export const ask = async(prompt, companyInfo = null, resumeData = null, intervie
     };
 
     try {
-        console.log(`Sending request with ${body.contents[0].parts[0].text.length + body.contents[0].parts[1].text.length} characters`);
+        console.log(`Sending request with ${enhancedPrompt.length} characters`);
         const response = await axios.post(`${GEMINI_MODEL}?key=${GEMINI_API_KEY}`, body, {
             headers: {
                 'Content-Type': 'application/json',
@@ -87,9 +76,20 @@ export const ask = async(prompt, companyInfo = null, resumeData = null, intervie
             timeout: 45000
         });
        
-        
-        if (!response.data.candidates || !response.data.candidates[0]) {
+        // Check response structure
+        if (!response.data) {
+            console.error("No response data from Gemini");
             throw new Error("Invalid response format from Gemini API");
+        }
+
+        if (!response.data.candidates || response.data.candidates.length === 0) {
+            console.error("No candidates in response:", JSON.stringify(response.data, null, 2));
+            throw new Error("Invalid response format from Gemini API - no candidates");
+        }
+
+        if (!response.data.candidates[0].content || !response.data.candidates[0].content.parts || response.data.candidates[0].content.parts.length === 0) {
+            console.error("No content/parts in response:", JSON.stringify(response.data.candidates[0], null, 2));
+            throw new Error("Invalid response format from Gemini API - no content");
         }
 
         const result = response.data.candidates[0].content.parts[0].text;
@@ -107,7 +107,7 @@ export const ask = async(prompt, companyInfo = null, resumeData = null, intervie
                 currentStage = jsonResponse.currentStage;
                 stageProgress = jsonResponse.stageProgress;
             }
-        } catch (jsonError) {
+        } catch  {
             console.log('JSON parsing failed, using fallback');
         }
      
@@ -137,6 +137,72 @@ export const ask = async(prompt, companyInfo = null, resumeData = null, intervie
     } catch (error) {
         console.error(`Gemini API failed:`, error.message);
         throw new Error(`Some server side error occurred`);
+    }
+};
+
+/**
+ * askDSA — Focused AI call for the new DSA interview architecture.
+ *
+ * Receives a pre-built prompt string (from buildDSAPrompt) that contains only
+ * the current stage, current problem, and current-problem conversation history.
+ * No full interview context. No cross-problem history.
+ *
+ * Expected AI response shape:
+ *   { question, feedback: { score, observation }, stageReadiness }
+ */
+export const askDSA = async (prompt) => {
+    if (!GEMINI_API_KEY) {
+        throw new Error("Gemini API key is not configured.");
+    }
+
+    const body = {
+        contents: [
+            {
+                role: "user",
+                parts: [{ text: DSA_STAGE_SYSTEM_PROMPT + "\n\n" + prompt }],
+            },
+        ],
+        generationConfig: {
+            temperature: 0.4,   // Lower than general ask() — more consistent stage adherence
+            topK: 20,
+            topP: 0.8,
+            maxOutputTokens: 512, // Questions are short; no need for large output
+        },
+    };
+
+    try {
+        console.log(`[askDSA] Sending prompt: ${prompt.length} chars`);
+        const response = await axios.post(
+            `${GEMINI_MODEL}?key=${GEMINI_API_KEY}`,
+            body,
+            { headers: { "Content-Type": "application/json" }, timeout: 30000 }
+        );
+
+        if (!response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+            throw new Error("Invalid response structure from Gemini API");
+        }
+
+        const raw = response.data.candidates[0].content.parts[0].text;
+
+        // Parse JSON response
+        let parsed = {};
+        try {
+            const match = raw.match(/\{[\s\S]*\}/);
+            if (match) parsed = JSON.parse(match[0]);
+        } catch {
+            console.warn("[askDSA] JSON parse failed, using fallback");
+        }
+
+        return {
+            question: (parsed.question || "Can you walk me through your thinking on this?").trim(),
+            feedback: parsed.feedback || { score: null, observation: "" },
+            stageReadiness: parsed.stageReadiness === "ready_to_advance"
+                ? "ready_to_advance"
+                : "continue",
+        };
+    } catch (error) {
+        console.error("[askDSA] Gemini API failed:", error.message);
+        throw new Error("Failed to generate interview question");
     }
 };
 
